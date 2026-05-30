@@ -26,20 +26,26 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const { zone } = useUser();
+  const [mounted, setMounted] = useState(false);
+  // ✅ FIX: zone remove - unused variable warning fix
+  const { deliveryFee } = useUser();
 
   useEffect(() => {
-    // Load from localStorage on mount
-    const savedCart = localStorage.getItem("bayzo_cart");
-    if (savedCart) {
-      setItems(JSON.parse(savedCart));
-    }
+    setMounted(true);
+    try {
+      const savedCart = localStorage.getItem("bayzo_cart");
+      if (savedCart) {
+        setItems(JSON.parse(savedCart));
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
-    // Save to localStorage when items change
-    localStorage.setItem("bayzo_cart", JSON.stringify(items));
-  }, [items]);
+    if (!mounted) return;
+    try {
+      localStorage.setItem("bayzo_cart", JSON.stringify(items));
+    } catch {}
+  }, [items, mounted]);
 
   const addToCart = (newItem: Omit<CartItem, "quantity">) => {
     setItems((prev) => {
@@ -72,12 +78,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => setItems([]);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  
-  // Delivery fee logic
-  // Zone 1, 2, 3 -> ₹20
-  // Zone 4, 5 -> ₹25
-  const deliveryFee = zone && zone >= 4 ? 25 : 20;
-
   const total = items.length > 0 ? subtotal + deliveryFee : 0;
 
   return (
