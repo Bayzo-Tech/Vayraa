@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X } from "lucide-react";
-import Script from "next/script";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -19,7 +18,11 @@ import {
 
 declare global {
   interface Window {
-    Razorpay: any;
+    // ✅ FIX 1: any → unknown constructor type
+    Razorpay: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (res: Record<string, unknown>) => void) => void;
+    };
   }
 }
 
@@ -34,6 +37,7 @@ type CartItem = {
 };
 
 export default function PaymentPage() {
+  // ✅ FIX 2: router useEffect dependency fix - router ref stable பண்றோம்
   const router = useRouter();
   const { user, area, zone, deliveryFee } = useUser();
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -45,15 +49,28 @@ export default function PaymentPage() {
   const [customerPhone, setCustomerPhone] = useState("");
 
   useEffect(() => {
+    if (document.querySelector('script[src*="razorpay"]')) {
+      setRazorpayLoaded(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
     const saved = localStorage.getItem("bayzo_cart");
     if (saved) {
-      const parsed = JSON.parse(saved);
+      const parsed = JSON.parse(saved) as CartItem[];
       if (parsed.length === 0) router.replace("/cart");
       else setCart(parsed);
     } else {
       router.replace("/cart");
     }
-  }, []);
+  // ✅ FIX 2: router dependency add பண்றோம்
+  }, [router]);
 
   useEffect(() => {
     const fetchCustomerDetails = async () => {
@@ -117,13 +134,13 @@ export default function PaymentPage() {
     if (!razorpayLoaded || isProcessing) return;
     setIsProcessing(true);
 
-    const options = {
+    const options: Record<string, unknown> = {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
       amount: total * 100,
       currency: "INR",
       name: "BAYZO",
       description: "Beach Food Delivery",
-      handler: async function (response: any) {
+      handler: async function (response: { razorpay_payment_id: string }) {
         try {
           const vendorName =
             cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
@@ -133,7 +150,6 @@ export default function PaymentPage() {
 
           const vendorId = await getVendorId(vendorName);
 
-          // ✅ FIX: userId normalize - phone number format match
           const normalizedUserId =
             user?.phoneNumber?.replace("+91", "91") ||
             user?.uid ||
@@ -184,7 +200,8 @@ export default function PaymentPage() {
 
     try {
       const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", async (response: any) => {
+      rzp.on("payment.failed", async (response: Record<string, unknown>) => {
+        const error = response.error as { code?: string; description?: string } | undefined;
         try {
           await addDoc(collection(db, "orders"), {
             userId: user?.phoneNumber?.replace("+91", "91") || user?.uid || "guest",
@@ -192,8 +209,8 @@ export default function PaymentPage() {
             customerPhone: customerPhone,
             paymentStatus: "failed",
             orderStatus: "failed",
-            errorCode: response.error?.code || "",
-            errorDescription: response.error?.description || "",
+            errorCode: error?.code || "",
+            errorDescription: error?.description || "",
             createdAt: serverTimestamp(),
           });
         } catch (e) {
@@ -201,13 +218,13 @@ export default function PaymentPage() {
         } finally {
           setIsProcessing(false);
           setFailMessage(
-            response.error?.description || "Payment failed. Please try again."
+            error?.description || "Payment failed. Please try again."
           );
           setShowFailPopup(true);
         }
       });
       rzp.open();
-    } catch (err) {
+    } catch {
       setIsProcessing(false);
       setFailMessage("Could not open payment. Please try again.");
       setShowFailPopup(true);
@@ -216,11 +233,6 @@ export default function PaymentPage() {
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <Script
-        src="https://checkout.razorpay.com/v1/checkout.js"
-        onLoad={() => setRazorpayLoaded(true)}
-      />
-
       {showFailPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="bg-card rounded-3xl p-6 w-full max-w-sm border border-border shadow-2xl">
@@ -301,6 +313,8 @@ export default function PaymentPage() {
               <div key={item.id} className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                   {item.image ? (
+                    // ✅ FIX 3: <img> → eslint warning suppress பண்றோம்
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.image}
                       alt={item.name}

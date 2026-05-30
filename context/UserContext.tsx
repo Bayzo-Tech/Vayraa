@@ -9,9 +9,8 @@ interface UserContextType {
   area: string;
   setArea: (area: string) => void;
   zone: number | null;
-  setZone: (zone: number | null) => void;
+  setZone: (zone: number | null, beachArea?: string) => void;
   role: string | null;
-  // ✅ NEW: deliveryFee Firebase-லிருந்து
   deliveryFee: number;
   setDeliveryFee: (fee: number) => void;
 }
@@ -27,7 +26,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [area, setArea] = useState<string>("");
   const [zone, setZone] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
-  // ✅ NEW: deliveryFee state - default 20
   const [deliveryFee, setDeliveryFee] = useState<number>(20);
 
   useEffect(() => {
@@ -36,7 +34,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const savedFee = localStorage.getItem("bayzo_delivery_fee");
     if (savedArea) setArea(savedArea);
     if (savedZone) setZone(Number(savedZone));
-    // ✅ NEW: saved fee restore
     if (savedFee) setDeliveryFee(Number(savedFee));
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -84,23 +81,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("bayzo_area", newArea);
   };
 
-  const handleSetZone = (newZone: number | null) => {
+  // ✅ FIX: any[] → ZoneType interface use பண்றோம்
+  const handleSetZoneWithFee = async (newZone: number | null, beachArea?: string) => {
     setZone(newZone);
     if (newZone !== null) {
       localStorage.setItem("bayzo_zone", newZone.toString());
     } else {
       localStorage.removeItem("bayzo_zone");
     }
-  };
 
-  // ✅ NEW: Firebase-லிருந்து zone fee fetch பண்றோம்
-  const handleSetZoneWithFee = async (newZone: number | null, beachArea?: string) => {
-    handleSetZone(newZone);
     if (newZone === null) {
       setDeliveryFee(20);
       localStorage.setItem("bayzo_delivery_fee", "20");
       return;
     }
+
     try {
       const targetArea = beachArea || area;
       const beachSnap = await getDocs(collection(db, "beaches"));
@@ -108,11 +103,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       beachSnap.docs.forEach((beachDoc) => {
         const beachData = beachDoc.data();
         if (beachData.area === targetArea || beachData.name === targetArea) {
-          const zones: any[] = beachData.zones || [];
-          // zone number = index + 1 (Zone 1, Zone 2...)
+          const zones: { fee?: number; name?: string }[] = beachData.zones || [];
           const matchedZone = zones[newZone - 1];
-          if (matchedZone && matchedZone.fee) {
-            foundFee = matchedZone.fee;
+          if (matchedZone && matchedZone.fee !== undefined) {
+            foundFee = Number(matchedZone.fee);
           }
         }
       });
