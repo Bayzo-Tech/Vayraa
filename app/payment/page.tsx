@@ -40,6 +40,7 @@ export default function PaymentPage() {
   // ✅ FIX 2: router useEffect dependency fix - router ref stable பண்றோம்
   const router = useRouter();
   const { user, area, zone, deliveryFee } = useUser();
+  const [mounted, setMounted] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
@@ -47,6 +48,10 @@ export default function PaymentPage() {
   const [failMessage, setFailMessage] = useState("");
   const [customerName, setCustomerName] = useState("Customer");
   const [customerPhone, setCustomerPhone] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (document.querySelector('script[src*="razorpay"]')) {
@@ -61,16 +66,23 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem("bayzo_cart");
-    if (saved) {
-      const parsed = JSON.parse(saved) as CartItem[];
-      if (parsed.length === 0) router.replace("/cart");
-      else setCart(parsed);
-    } else {
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem("bayzo_cart");
+      if (saved) {
+        const parsed = JSON.parse(saved) as CartItem[];
+        if (parsed.length === 0) router.replace("/cart");
+        else setCart(parsed);
+      } else {
+        router.replace("/cart");
+      }
+    } catch (e) {
+      console.error(e);
       router.replace("/cart");
     }
-  // ✅ FIX 2: router dependency add பண்றோம்
-  }, [router]);
+  // ✅ FIX: router dependency add பண்றோம்
+  }, [mounted, router]);
 
   useEffect(() => {
     const fetchCustomerDetails = async () => {
@@ -179,7 +191,13 @@ export default function PaymentPage() {
             createdAt: serverTimestamp(),
           });
 
-          localStorage.removeItem("bayzo_cart");
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.removeItem("bayzo_cart");
+            } catch (e) {
+              console.error(e);
+            }
+          }
           router.replace("/confirmed");
         } catch (e) {
           console.error("Firestore error:", e);

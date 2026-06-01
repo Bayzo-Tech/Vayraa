@@ -27,25 +27,37 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   // ✅ FIX: zone remove - unused variable warning fix
   const { deliveryFee } = useUser();
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
     try {
       const savedCart = localStorage.getItem("bayzo_cart");
       if (savedCart) {
         setItems(JSON.parse(savedCart));
       }
-    } catch {}
-  }, []);
+    } catch (e) {
+      console.error(e);
+    }
+    setIsLoaded(true);
+  }, [mounted]);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || !isLoaded) return;
+    if (typeof window === "undefined") return;
     try {
       localStorage.setItem("bayzo_cart", JSON.stringify(items));
-    } catch {}
-  }, [items, mounted]);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [items, mounted, isLoaded]);
 
   const addToCart = (newItem: Omit<CartItem, "quantity">) => {
     setItems((prev) => {

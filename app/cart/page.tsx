@@ -28,6 +28,7 @@ export default function CartPage() {
   const { zone, deliveryFee } = useUser();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -35,21 +36,30 @@ export default function CartPage() {
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem("bayzo_cart");
-    if (saved) {
-      try {
-        setCart(JSON.parse(saved));
-      } catch {
-        setCart([]);
-      }
-    }
   }, []);
 
   useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("bayzo_cart", JSON.stringify(cart));
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem("bayzo_cart");
+      if (saved) {
+        setCart(JSON.parse(saved));
+      }
+    } catch {
+      setCart([]);
     }
-  }, [cart, mounted]);
+    setIsLoaded(true);
+  }, [mounted]);
+
+  useEffect(() => {
+    if (mounted && isLoaded) {
+      if (typeof window === "undefined") return;
+      try {
+        localStorage.setItem("bayzo_cart", JSON.stringify(cart));
+      } catch {}
+    }
+  }, [cart, mounted, isLoaded]);
 
   const updateQty = (id: string, delta: number) => {
     setCart((prev) => {

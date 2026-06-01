@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -8,7 +8,12 @@ import { ArrowLeft } from "lucide-react";
 
 export default function BasicDetailsPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
   const [email, setEmail] = useState("");
@@ -42,7 +47,14 @@ export default function BasicDetailsPage() {
     setLoading(true);
     try {
       // Get uid from localStorage or Firebase auth
-      const userStr = localStorage.getItem("user");
+      let userStr = null;
+      if (mounted && typeof window !== "undefined") {
+        try {
+          userStr = localStorage.getItem("user");
+        } catch (e) {
+          console.error(e);
+        }
+      }
       const localUser = userStr ? JSON.parse(userStr) : {};
       const uid = localUser.uid || auth.currentUser?.uid;
 
@@ -61,11 +73,17 @@ export default function BasicDetailsPage() {
       await setDoc(doc(db, "users", uid), userDetails, { merge: true });
 
       // ✅ Update localStorage
-      localStorage.setItem("user", JSON.stringify({
-        ...localUser,
-        ...userDetails,
-        profileComplete: true,
-      }));
+      if (mounted && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("user", JSON.stringify({
+            ...localUser,
+            ...userDetails,
+            profileComplete: true,
+          }));
+        } catch (e) {
+          console.error(e);
+        }
+      }
 
       // ✅ Navigate to area selection
       router.push("/area");

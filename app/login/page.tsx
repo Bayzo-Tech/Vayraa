@@ -7,6 +7,8 @@ import { auth } from "@/lib/firebase";
 import { ArrowLeft } from "lucide-react";
 
 export default function LoginPage() {
+  const [mounted, setMounted] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -16,13 +18,22 @@ export default function LoginPage() {
 
   // ✅ Problem 5 Fix: Already logged in? Redirect to home
   useEffect(() => {
+    setMounted(true);
+    const hasSession = typeof document !== "undefined" && document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
+    if (hasSession) {
+      router.replace("/home");
+      return;
+    }
+
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
         router.replace("/home");
+      } else {
+        setCheckingAuth(false);
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,8 +105,14 @@ export default function LoginPage() {
         // ✅ Set session cookie so middleware knows user is logged in
         document.cookie = `bayzo_session=${data.token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
 
-        localStorage.setItem("bayzo_token", data.token);
-        localStorage.setItem("user", JSON.stringify({ uid: data.uid, phone }));
+        if (mounted && typeof window !== "undefined") {
+          try {
+            localStorage.setItem("bayzo_token", data.token);
+            localStorage.setItem("user", JSON.stringify({ uid: data.uid, phone }));
+          } catch (e) {
+            console.error(e);
+          }
+        }
 
         if (data.profileComplete) {
           router.replace("/home");
@@ -111,6 +128,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col p-6">
@@ -140,6 +165,7 @@ export default function LoginPage() {
           <form onSubmit={handleSendOtp} className="space-y-6">
             <div className="flex items-center bg-card border-2 border-border rounded-2xl h-16 px-4 focus-within:border-primary transition-all">
               <span className="text-2xl mr-2">🇮🇳</span>
+              <span className="text-muted font-bold text-sm mr-2">IN</span>
               <span className="text-foreground font-semibold text-lg mr-3">+91</span>
               <div className="w-px h-8 bg-border mr-3" />
               <input

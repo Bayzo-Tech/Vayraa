@@ -38,6 +38,7 @@ const safeLocalStorage = {
 };
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [area, setArea] = useState<string>("");
   const [zone, setZone] = useState<number | null>(null);
@@ -45,6 +46,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [deliveryFee, setDeliveryFee] = useState<number>(20);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     const savedArea = safeLocalStorage.get("bayzo_area");
     const savedZone = safeLocalStorage.get("bayzo_zone");
     const savedFee = safeLocalStorage.get("bayzo_delivery_fee");
@@ -90,25 +96,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [mounted]);
 
   const handleSetArea = (newArea: string) => {
     setArea(newArea);
-    safeLocalStorage.set("bayzo_area", newArea);
+    if (mounted) {
+      safeLocalStorage.set("bayzo_area", newArea);
+    }
   };
 
   // ✅ FIX: any[] → ZoneType interface use பண்றோம்
   const handleSetZoneWithFee = async (newZone: number | null, beachArea?: string) => {
     setZone(newZone);
-    if (newZone !== null) {
-      safeLocalStorage.set("bayzo_zone", newZone.toString());
-    } else {
-      safeLocalStorage.remove("bayzo_zone");
+    if (mounted) {
+      if (newZone !== null) {
+        safeLocalStorage.set("bayzo_zone", newZone.toString());
+      } else {
+        safeLocalStorage.remove("bayzo_zone");
+      }
     }
 
     if (newZone === null) {
       setDeliveryFee(20);
-      safeLocalStorage.set("bayzo_delivery_fee", "20");
+      if (mounted) {
+        safeLocalStorage.set("bayzo_delivery_fee", "20");
+      }
       return;
     }
 
@@ -127,7 +139,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       });
       setDeliveryFee(foundFee);
-      safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
+      if (mounted) {
+        safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
+      }
     } catch (e) {
       console.error("Fee fetch error:", e);
       setDeliveryFee(20);

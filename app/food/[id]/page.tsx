@@ -24,9 +24,14 @@ type CartItem = FoodItem & { quantity: number };
 export default function FoodDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { area, zone } = useUser();
+  const [mounted, setMounted] = useState(false);
   const [food, setFood] = useState<FoodItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Firebase-லிருந்து food fetch பண்றோம்
   useEffect(() => {
@@ -51,22 +56,30 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
 
   // Cart-லிருந்து current quantity எடுக்கறோம்
   useEffect(() => {
-    if (!food) return;
-    const saved = localStorage.getItem("bayzo_cart");
-    if (saved) {
-      try {
+    if (!mounted || !food) return;
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem("bayzo_cart");
+      if (saved) {
         const cart: CartItem[] = JSON.parse(saved);
         const existing = cart.find((i) => i.id === food.id);
         setQuantity(existing?.quantity || 0);
-      } catch {
-        setQuantity(0);
       }
+    } catch (e) {
+      console.error(e);
+      setQuantity(0);
     }
-  }, [food]);
+  }, [food, mounted]);
 
   const updateCart = (newQty: number) => {
-    if (!food) return;
-    const saved = localStorage.getItem("bayzo_cart");
+    if (!mounted || !food) return;
+    if (typeof window === "undefined") return;
+    let saved = null;
+    try {
+      saved = localStorage.getItem("bayzo_cart");
+    } catch (e) {
+      console.error(e);
+    }
     let cart: CartItem[] = [];
     try {
       cart = saved ? JSON.parse(saved) : [];
@@ -96,7 +109,11 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
       });
     }
 
-    localStorage.setItem("bayzo_cart", JSON.stringify(cart));
+    try {
+      localStorage.setItem("bayzo_cart", JSON.stringify(cart));
+    } catch (e) {
+      console.error(e);
+    }
     setQuantity(newQty);
   };
 

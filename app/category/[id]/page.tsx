@@ -36,6 +36,8 @@ export default function CategoryPage() {
   const { area } = useUser();
   const categoryId = params.id as string;
 
+  const [mounted, setMounted] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [category, setCategory] = useState<Category | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,16 +45,33 @@ export default function CategoryPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [filterType, setFilterType] = useState<"all" | "veg" | "nonveg">("all");
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // ✅ Load cart from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem("bayzo_cart");
-    if (saved) setCart(JSON.parse(saved));
-  }, []);
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem("bayzo_cart");
+      if (saved) setCart(JSON.parse(saved));
+    } catch (e) {
+      console.error(e);
+    }
+    setIsLoaded(true);
+  }, [mounted]);
 
   // ✅ Save cart to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem("bayzo_cart", JSON.stringify(cart));
-  }, [cart]);
+    if (!mounted || !isLoaded) return;
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("bayzo_cart", JSON.stringify(cart));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [cart, mounted, isLoaded]);
 
   useEffect(() => {
     if (!area) { router.replace("/area"); return; }

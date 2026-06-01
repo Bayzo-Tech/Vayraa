@@ -17,6 +17,9 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "VAYRA",
   description: "Beach Bites, Delivered to Your Zone 🌊",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
