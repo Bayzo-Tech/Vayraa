@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { ArrowLeft, Copy, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
@@ -24,7 +24,7 @@ const statusColors: Record<string, string> = {
   delivered: "bg-green-500/20 text-green-500",
 };
 
-export default function OrdersPage() {
+export default function HistoryPage() {
   const { user } = useUser();
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);

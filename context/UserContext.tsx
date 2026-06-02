@@ -19,7 +19,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, onSnapshot, query } from "firebase/firestore";
 
 // ✅ FIX: SSR-safe localStorage - OnePlus/Samsung crash fix
 const safeLocalStorage = {
@@ -43,7 +43,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [area, setArea] = useState<string>("");
   const [zone, setZone] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
-  const [deliveryFee, setDeliveryFee] = useState<number>(20);
+  const [deliveryFee, setDeliveryFee] = useState<number>(10);
 
   useEffect(() => {
     setMounted(true);
@@ -78,7 +78,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setRole(null);
             setArea("");
             setZone(null);
-            setDeliveryFee(20);
+            setDeliveryFee(10);
             window.location.href = "/login";
           }
         } catch (error) {
@@ -97,6 +97,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, [mounted]);
+
+  // Real-time listener for the delivery fee based on area and zone
+  useEffect(() => {
+    if (!mounted) return;
+    if (!area || zone === null) {
+      setDeliveryFee(10);
+      safeLocalStorage.set("bayzo_delivery_fee", "10");
+      return;
+    }
+
+    const q = query(collection(db, "beaches"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let foundFee = 10;
+      snapshot.docs.forEach((beachDoc) => {
+        const beachData = beachDoc.data();
+        if (beachData.area === area || beachData.name === area) {
+          const zones: { fee?: number; name?: string }[] = beachData.zones || [];
+          const matchedZone = zones[zone - 1];
+          if (matchedZone && matchedZone.fee !== undefined) {
+            foundFee = Number(matchedZone.fee);
+          }
+        }
+      });
+      setDeliveryFee(foundFee);
+      safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
+    }, (error) => {
+      console.error("Real-time fee fetch error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [area, zone, mounted]);
 
   const handleSetArea = (newArea: string) => {
     setArea(newArea);
@@ -117,9 +148,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (newZone === null) {
-      setDeliveryFee(20);
+      setDeliveryFee(10);
       if (mounted) {
-        safeLocalStorage.set("bayzo_delivery_fee", "20");
+        safeLocalStorage.set("bayzo_delivery_fee", "10");
       }
       return;
     }
@@ -127,7 +158,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const targetArea = beachArea || area;
       const beachSnap = await getDocs(collection(db, "beaches"));
-      let foundFee = 20;
+      let foundFee = 10;
       beachSnap.docs.forEach((beachDoc) => {
         const beachData = beachDoc.data();
         if (beachData.area === targetArea || beachData.name === targetArea) {
@@ -144,7 +175,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.error("Fee fetch error:", e);
-      setDeliveryFee(20);
+      setDeliveryFee(10);
     }
   };
 

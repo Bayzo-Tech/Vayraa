@@ -167,7 +167,7 @@ export default function PaymentPage() {
             user?.uid ||
             "guest";
 
-          await addDoc(collection(db, "orders"), {
+          const docRef = await addDoc(collection(db, "orders"), {
             userId: normalizedUserId,
             customerName: customerName,
             customerPhone: customerPhone,
@@ -193,12 +193,19 @@ export default function PaymentPage() {
 
           if (typeof window !== "undefined") {
             try {
+              sessionStorage.setItem("last_order_id", docRef.id);
+              sessionStorage.setItem("last_order_amount", total.toString());
+              sessionStorage.setItem("last_order_items", JSON.stringify(cart.map(i => ({
+                name: i.name,
+                quantity: i.quantity,
+                price: finalPrice(i)
+              }))));
               localStorage.removeItem("bayzo_cart");
             } catch (e) {
               console.error(e);
             }
           }
-          router.replace("/confirmed");
+          router.replace(`/confirmed?orderId=${docRef.id}&amount=${total}`);
         } catch (e) {
           console.error("Firestore error:", e);
           setIsProcessing(false);
