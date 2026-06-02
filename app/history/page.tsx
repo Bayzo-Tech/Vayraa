@@ -126,7 +126,7 @@ export default function HistoryPage() {
     <div className="min-h-screen bg-background flex flex-col pb-10">
       <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-border">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/")}
           className="p-2 bg-card rounded-full border border-border"
         >
           <ArrowLeft size={20} />

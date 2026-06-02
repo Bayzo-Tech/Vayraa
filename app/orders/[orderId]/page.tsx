@@ -117,8 +117,8 @@ export default function OrderTrackingPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center">
         <h2 className="text-xl font-bold mb-2">Order Not Found</h2>
-        <button onClick={() => router.push("/orders")} className="text-primary mt-4">
-          Return to Orders
+        <button onClick={() => router.push("/history")} className="text-primary mt-4">
+          Return to History
         </button>
       </div>
     );
@@ -133,7 +133,7 @@ export default function OrderTrackingPage() {
       {/* Header */}
       <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-border">
         <button
-          onClick={() => router.push("/orders")}
+          onClick={() => router.push("/history")}
           className="p-2 bg-card rounded-full border border-border"
         >
           <ArrowLeft size={20} />

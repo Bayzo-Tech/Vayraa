@@ -2,7 +2,7 @@
 
 import { useUser } from "@/context/UserContext";
 import { useCart } from "@/context/CartContext";
-import { ChevronDown, ShoppingCart, Receipt, ShieldCheck } from "lucide-react";
+import { ChevronDown, ShoppingCart, ScrollText, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -41,8 +41,11 @@ export function Navbar() {
           </Link>
         )}
         
-        <Link href="/orders" className="p-2 bg-card rounded-full border border-border">
-          <Receipt size={20} className="text-foreground" />
+        <Link 
+          href="/history" 
+          className="p-2 bg-gradient-to-tr from-orange-500/20 to-orange-500/10 hover:from-orange-500/30 hover:to-orange-500/20 rounded-full border border-orange-500/30 transition-all duration-300 shadow-sm shadow-orange-500/10 active:scale-95 group"
+        >
+          <ScrollText size={20} className="text-primary group-hover:scale-110 transition-transform duration-300" />
         </Link>
 
         <Link href="/cart" className="relative p-2 bg-card rounded-full border border-border">
