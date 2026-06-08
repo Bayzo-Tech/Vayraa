@@ -151,8 +151,8 @@ export default function PaymentPage() {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
       amount: total * 100,
       currency: "INR",
-      name: "BAYZO",
-      description: "Beach Food Delivery",
+      name: "Vayra",
+      description: "Beach Food Delivery - Vayra",
       handler: async function (response: { razorpay_payment_id: string }) {
         try {
           const vendorName =
@@ -236,7 +236,7 @@ export default function PaymentPage() {
               console.error(e);
             }
           }
-          router.replace(`/confirmed?orderId=${orderId}&amount=${total}`);
+          window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
         } catch (e) {
           console.error("Firestore error:", e);
           setIsProcessing(false);

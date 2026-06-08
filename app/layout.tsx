@@ -18,8 +18,9 @@ export const metadata: Metadata = {
   title: "VAYRA",
   description: "Beach Bites, Delivered to Your Zone 🌊",
   icons: {
-    icon: "/favicon.png",
-    apple: "/favicon.png",
+    icon: '/favicon_Carb.png',
+    apple: '/favicon_Carb.png',
+    shortcut: '/favicon_Carb.png',
   },
 };
 
@@ -31,8 +32,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/favicon.png" />
+        <link rel="icon" href="/favicon_Carb.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/favicon_Carb.png" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
