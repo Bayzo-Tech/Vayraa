@@ -14,6 +14,7 @@ import {
   query,
   where,
   getDocs,
+  setDoc,
 } from "firebase/firestore";
 
 declare global {
@@ -167,8 +168,33 @@ export default function PaymentPage() {
             user?.uid ||
             "guest";
 
-          const docRef = await addDoc(collection(db, "orders"), {
-            userId: normalizedUserId,
+          // Lookup beachId and zoneId in Firestore
+          let beachId = "";
+          let zoneId = "";
+          try {
+            if (area) {
+              const beachSnap = await getDocs(collection(db, "beaches"));
+              for (const beachDoc of beachSnap.docs) {
+                const beachData = beachDoc.data();
+                if (beachData.area === area || beachData.name === area) {
+                  beachId = beachDoc.id;
+                  if (beachData.zones && zone !== null && beachData.zones[zone - 1]) {
+                    zoneId = beachData.zones[zone - 1].name || `Zone ${zone}`;
+                  }
+                  break;
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error looking up beach/zone mapping:", err);
+          }
+
+          const docRef = doc(collection(db, "orders"));
+          const orderId = docRef.id;
+
+          await setDoc(docRef, {
+            orderId: orderId,
+            customerId: user?.uid || normalizedUserId,
             customerName: customerName,
             customerPhone: customerPhone,
             vendorName: vendorName,
@@ -186,14 +212,19 @@ export default function PaymentPage() {
             deliveryFee,
             totalAmount: total,
             paymentId: response.razorpay_payment_id,
+            paymentMethod: "razorpay",
             paymentStatus: "paid",
+            status: "placed",
             orderStatus: "placed",
             createdAt: serverTimestamp(),
+            beachId: beachId,
+            zoneId: zoneId,
+            userId: normalizedUserId,
           });
 
           if (typeof window !== "undefined") {
             try {
-              sessionStorage.setItem("last_order_id", docRef.id);
+              sessionStorage.setItem("last_order_id", orderId);
               sessionStorage.setItem("last_order_amount", total.toString());
               sessionStorage.setItem("last_order_items", JSON.stringify(cart.map(i => ({
                 name: i.name,
@@ -205,7 +236,7 @@ export default function PaymentPage() {
               console.error(e);
             }
           }
-          router.replace(`/confirmed?orderId=${docRef.id}&amount=${total}`);
+          router.replace(`/confirmed?orderId=${orderId}&amount=${total}`);
         } catch (e) {
           console.error("Firestore error:", e);
           setIsProcessing(false);

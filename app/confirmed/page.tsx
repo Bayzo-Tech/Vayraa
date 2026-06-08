@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Home, Clock, MapPin, Copy, CheckCircle2, Phone, Receipt, ShoppingBag } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 function ConfirmedPageContent() {
   const router = useRouter();
@@ -39,6 +41,26 @@ function ConfirmedPageContent() {
       } catch (e) {
         console.error("Error reading sessionStorage:", e);
       }
+    }
+
+    // Dynamic/reliable fetch from Firestore directly (Safari / iPhone cross-origin fallback)
+    const effectiveOrderId = queryOrderId || (typeof window !== "undefined" ? sessionStorage.getItem("last_order_id") : null);
+    if (effectiveOrderId) {
+      const fetchOrderDetails = async () => {
+        try {
+          const docRef = doc(db, "orders", effectiveOrderId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.totalAmount !== undefined) setAmount(Number(data.totalAmount));
+            else if (data.total !== undefined) setAmount(Number(data.total));
+            if (data.items) setItems(data.items);
+          }
+        } catch (e) {
+          console.error("Error fetching order details from Firestore:", e);
+        }
+      };
+      fetchOrderDetails();
     }
   }, [searchParams]);
 
