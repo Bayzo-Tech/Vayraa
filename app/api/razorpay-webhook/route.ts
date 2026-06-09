@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,18 +41,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ status: "updated" });
       }
 
-      // Order missing — save with basic details as fallback
-      await db.collection("orders").add({
-        paymentId: paymentId,
-        totalAmount: amount,
-        customerPhone: contact.replace("+91", ""),
-        paymentMethod: "razorpay",
-        paymentStatus: "paid",
-        status: "placed",
-        orderStatus: "placed",
-        createdAt: FieldValue.serverTimestamp(),
-        source: "webhook_fallback",
-      });
+      // Order not found — do NOT create a new document, just log and continue
+      console.warn(`Webhook: No pending order found for paymentId ${paymentId}. Skipping.`);
     }
     return NextResponse.json({ status: "ok" });
   } catch (error) {
