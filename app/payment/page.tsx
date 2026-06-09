@@ -7,7 +7,6 @@ import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
-  addDoc,
   serverTimestamp,
   doc,
   getDoc,
@@ -15,11 +14,11 @@ import {
   where,
   getDocs,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 declare global {
   interface Window {
-    // ✅ FIX 1: any → unknown constructor type
     Razorpay: new (options: Record<string, unknown>) => {
       open: () => void;
       on: (event: string, handler: (res: Record<string, unknown>) => void) => void;
@@ -38,7 +37,6 @@ type CartItem = {
 };
 
 export default function PaymentPage() {
-  // ✅ FIX 2: router useEffect dependency fix - router ref stable பண்றோம்
   const router = useRouter();
   const { user, area, zone, deliveryFee } = useUser();
   const [mounted, setMounted] = useState(false);
@@ -82,7 +80,6 @@ export default function PaymentPage() {
       console.error(e);
       router.replace("/cart");
     }
-  // ✅ FIX: router dependency add பண்றோம்
   }, [mounted, router]);
 
   useEffect(() => {
@@ -147,101 +144,109 @@ export default function PaymentPage() {
     if (!razorpayLoaded || isProcessing) return;
     setIsProcessing(true);
 
-    const options: Record<string, unknown> = {
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      amount: total * 100,
-      currency: "INR",
-      name: "Vayra",
-      description: "Beach Food Delivery - Vayra",
-      handler: async function (response: { razorpay_payment_id: string }) {
-        try {
-          const vendorName =
-            cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
-          const itemsSummary = cart
-            .map((i) => `${i.quantity}x ${i.name}`)
-            .join(", ");
+    try {
+      const vendorName =
+        cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
+      const itemsSummary = cart
+        .map((i) => `${i.quantity}x ${i.name}`)
+        .join(", ");
 
-          const vendorId = await getVendorId(vendorName);
+      const vendorId = await getVendorId(vendorName);
 
-          const normalizedUserId =
-            user?.phoneNumber?.replace("+91", "91") ||
-            user?.uid ||
-            "guest";
+      const normalizedUserId =
+        user?.phoneNumber?.replace("+91", "91") ||
+        user?.uid ||
+        "guest";
 
-          // Lookup beachId and zoneId in Firestore
-          let beachId = "";
-          let zoneId = "";
-          try {
-            if (area) {
-              const beachSnap = await getDocs(collection(db, "beaches"));
-              for (const beachDoc of beachSnap.docs) {
-                const beachData = beachDoc.data();
-                if (beachData.area === area || beachData.name === area) {
-                  beachId = beachDoc.id;
-                  if (beachData.zones && zone !== null && beachData.zones[zone - 1]) {
-                    zoneId = beachData.zones[zone - 1].name || `Zone ${zone}`;
-                  }
-                  break;
-                }
+      // Lookup beachId and zoneId in Firestore
+      let beachId = "";
+      let zoneId = "";
+      try {
+        if (area) {
+          const beachSnap = await getDocs(collection(db, "beaches"));
+          for (const beachDoc of beachSnap.docs) {
+            const beachData = beachDoc.data();
+            if (beachData.area === area || beachData.name === area) {
+              beachId = beachDoc.id;
+              if (beachData.zones && zone !== null && beachData.zones[zone - 1]) {
+                zoneId = beachData.zones[zone - 1].name || `Zone ${zone}`;
               }
-            }
-          } catch (err) {
-            console.error("Error looking up beach/zone mapping:", err);
-          }
-
-          const docRef = doc(collection(db, "orders"));
-          const orderId = docRef.id;
-
-          // Retry setDoc up to 3 times before giving up
-          let saveSuccess = false;
-          let lastError = null;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              await setDoc(docRef, {
-                orderId: orderId,
-                customerId: user?.uid || normalizedUserId,
-                customerName: customerName,
-                customerPhone: customerPhone,
-                vendorName: vendorName,
-                vendorId: vendorId,
-                itemsSummary: itemsSummary,
-                phone: user?.phoneNumber || customerPhone || "unknown",
-                location: { area, zone: `Zone ${zone}` },
-                items: cart.map((i) => ({
-                  name: i.name,
-                  price: finalPrice(i),
-                  quantity: i.quantity,
-                  stallName: i.stallName,
-                })),
-                itemTotal: subtotal,
-                deliveryFee,
-                totalAmount: total,
-                paymentId: response.razorpay_payment_id,
-                paymentMethod: "razorpay",
-                paymentStatus: "paid",
-                status: "placed",
-                orderStatus: "placed",
-                createdAt: serverTimestamp(),
-                beachId: beachId,
-                zoneId: zoneId,
-                userId: normalizedUserId,
-              });
-              saveSuccess = true;
               break;
-            } catch (err) {
-              lastError = err;
-              console.error(`Firestore save attempt ${attempt} failed:`, err);
-              if (attempt < 3) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              }
             }
           }
+        }
+      } catch (err) {
+        console.error("Error looking up beach/zone mapping:", err);
+      }
 
-          if (!saveSuccess) {
-            console.error("All 3 Firestore save attempts failed:", lastError);
-            // Still redirect so customer sees confirmation
-            // but log the paymentId so it can be recovered manually
-            console.error("MANUAL RECOVERY NEEDED - PaymentId:", response.razorpay_payment_id, "Amount:", total);
+      const docRef = doc(collection(db, "orders"));
+      const orderId = docRef.id;
+
+      // Save order BEFORE payment (guaranteed full details)
+      // Retry setDoc up to 3 times before giving up
+      let saveSuccess = false;
+      let lastError = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await setDoc(docRef, {
+            orderId: orderId,
+            customerId: user?.uid || normalizedUserId,
+            customerName: customerName,
+            customerPhone: customerPhone,
+            vendorName: vendorName,
+            vendorId: vendorId,
+            itemsSummary: itemsSummary,
+            phone: user?.phoneNumber || customerPhone || "unknown",
+            location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
+            items: cart.map((i) => ({
+              name: i.name,
+              price: finalPrice(i),
+              quantity: i.quantity,
+              stallName: i.stallName,
+            })),
+            itemTotal: subtotal,
+            deliveryFee,
+            totalAmount: total,
+            paymentMethod: "razorpay",
+            paymentStatus: "pending",
+            status: "pending",
+            orderStatus: "pending",
+            createdAt: serverTimestamp(),
+            beachId: beachId,
+            zoneId: zoneId,
+            userId: normalizedUserId,
+          });
+          saveSuccess = true;
+          break;
+        } catch (err) {
+          lastError = err;
+          console.error(`Firestore pre-save attempt ${attempt} failed:`, err);
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+
+      if (!saveSuccess) {
+        console.error("All 3 Firestore pre-save attempts failed:", lastError);
+      }
+
+      const options: Record<string, unknown> = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: total * 100,
+        currency: "INR",
+        name: "Vayra",
+        description: "Beach Food Delivery - Vayra",
+        handler: async function (response: { razorpay_payment_id: string }) {
+          try {
+            await updateDoc(docRef, {
+              paymentId: response.razorpay_payment_id,
+              paymentStatus: "paid",
+              status: "placed",
+              orderStatus: "placed",
+            });
+          } catch (e) {
+            console.error("Failed to update status on success:", e);
           }
 
           try {
@@ -251,53 +256,56 @@ export default function PaymentPage() {
           }
 
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
-        } catch (e) {
-          console.error("Firestore error:", e);
-          setIsProcessing(false);
-        }
-      },
-      prefill: {
-        contact:
-          customerPhone || user?.phoneNumber?.replace("+91", "") || "",
-      },
-      theme: { color: "#FF6B00" },
-      modal: {
-        ondismiss: function () {
-          setIsProcessing(false);
         },
-      },
-    };
+        prefill: {
+          contact:
+            customerPhone || user?.phoneNumber?.replace("+91", "") || "",
+        },
+        theme: { color: "#FF6B00" },
+        modal: {
+          ondismiss: async function () {
+            try {
+              await updateDoc(docRef, {
+                status: "cancelled",
+                orderStatus: "cancelled",
+              });
+            } catch (e) {
+              console.error("Failed to update status on dismiss:", e);
+            }
+            setIsProcessing(false);
+          },
+        },
+      };
 
-    try {
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", async (response: Record<string, unknown>) => {
-        const error = response.error as { code?: string; description?: string } | undefined;
-        try {
-          await addDoc(collection(db, "orders"), {
-            userId: user?.phoneNumber?.replace("+91", "91") || user?.uid || "guest",
-            customerName: customerName,
-            customerPhone: customerPhone,
-            paymentStatus: "failed",
-            orderStatus: "failed",
-            errorCode: error?.code || "",
-            errorDescription: error?.description || "",
-            createdAt: serverTimestamp(),
-          });
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setIsProcessing(false);
-          setFailMessage(
-            error?.description || "Payment failed. Please try again."
-          );
-          setShowFailPopup(true);
-        }
-      });
-      rzp.open();
-    } catch {
+      try {
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", async (response: Record<string, unknown>) => {
+          const error = response.error as { code?: string; description?: string } | undefined;
+          try {
+            await updateDoc(docRef, {
+              status: "failed",
+              orderStatus: "failed",
+              paymentStatus: "failed",
+            });
+          } catch (e) {
+            console.error("Failed to update status on failure:", e);
+          } finally {
+            setIsProcessing(false);
+            setFailMessage(
+              error?.description || "Payment failed. Please try again."
+            );
+            setShowFailPopup(true);
+          }
+        });
+        rzp.open();
+      } catch {
+        setIsProcessing(false);
+        setFailMessage("Could not open payment. Please try again.");
+        setShowFailPopup(true);
+      }
+    } catch (e) {
+      console.error("Payment initiation error:", e);
       setIsProcessing(false);
-      setFailMessage("Could not open payment. Please try again.");
-      setShowFailPopup(true);
     }
   };
 
@@ -383,7 +391,6 @@ export default function PaymentPage() {
               <div key={item.id} className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                   {item.image ? (
-                    // ✅ FIX 3: <img> → eslint warning suppress பண்றோம்
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.image}
