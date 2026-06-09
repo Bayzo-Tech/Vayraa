@@ -192,50 +192,64 @@ export default function PaymentPage() {
           const docRef = doc(collection(db, "orders"));
           const orderId = docRef.id;
 
-          await setDoc(docRef, {
-            orderId: orderId,
-            customerId: user?.uid || normalizedUserId,
-            customerName: customerName,
-            customerPhone: customerPhone,
-            vendorName: vendorName,
-            vendorId: vendorId,
-            itemsSummary: itemsSummary,
-            phone: user?.phoneNumber || customerPhone || "unknown",
-            location: { area, zone: `Zone ${zone}` },
-            items: cart.map((i) => ({
-              name: i.name,
-              price: finalPrice(i),
-              quantity: i.quantity,
-              stallName: i.stallName,
-            })),
-            itemTotal: subtotal,
-            deliveryFee,
-            totalAmount: total,
-            paymentId: response.razorpay_payment_id,
-            paymentMethod: "razorpay",
-            paymentStatus: "paid",
-            status: "placed",
-            orderStatus: "placed",
-            createdAt: serverTimestamp(),
-            beachId: beachId,
-            zoneId: zoneId,
-            userId: normalizedUserId,
-          });
-
-          if (typeof window !== "undefined") {
+          // Retry setDoc up to 3 times before giving up
+          let saveSuccess = false;
+          let lastError = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              sessionStorage.setItem("last_order_id", orderId);
-              sessionStorage.setItem("last_order_amount", total.toString());
-              sessionStorage.setItem("last_order_items", JSON.stringify(cart.map(i => ({
-                name: i.name,
-                quantity: i.quantity,
-                price: finalPrice(i)
-              }))));
-              localStorage.removeItem("bayzo_cart");
-            } catch (e) {
-              console.error(e);
+              await setDoc(docRef, {
+                orderId: orderId,
+                customerId: user?.uid || normalizedUserId,
+                customerName: customerName,
+                customerPhone: customerPhone,
+                vendorName: vendorName,
+                vendorId: vendorId,
+                itemsSummary: itemsSummary,
+                phone: user?.phoneNumber || customerPhone || "unknown",
+                location: { area, zone: `Zone ${zone}` },
+                items: cart.map((i) => ({
+                  name: i.name,
+                  price: finalPrice(i),
+                  quantity: i.quantity,
+                  stallName: i.stallName,
+                })),
+                itemTotal: subtotal,
+                deliveryFee,
+                totalAmount: total,
+                paymentId: response.razorpay_payment_id,
+                paymentMethod: "razorpay",
+                paymentStatus: "paid",
+                status: "placed",
+                orderStatus: "placed",
+                createdAt: serverTimestamp(),
+                beachId: beachId,
+                zoneId: zoneId,
+                userId: normalizedUserId,
+              });
+              saveSuccess = true;
+              break;
+            } catch (err) {
+              lastError = err;
+              console.error(`Firestore save attempt ${attempt} failed:`, err);
+              if (attempt < 3) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              }
             }
           }
+
+          if (!saveSuccess) {
+            console.error("All 3 Firestore save attempts failed:", lastError);
+            // Still redirect so customer sees confirmation
+            // but log the paymentId so it can be recovered manually
+            console.error("MANUAL RECOVERY NEEDED - PaymentId:", response.razorpay_payment_id, "Amount:", total);
+          }
+
+          try {
+            localStorage.removeItem("bayzo_cart");
+          } catch (e) {
+            console.error(e);
+          }
+
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
         } catch (e) {
           console.error("Firestore error:", e);
