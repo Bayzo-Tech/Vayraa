@@ -238,15 +238,22 @@ export default function PaymentPage() {
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
         handler: async function (response: { razorpay_payment_id: string }) {
-          try {
-            await updateDoc(docRef, {
-              paymentId: response.razorpay_payment_id,
-              paymentStatus: "paid",
-              status: "placed",
-              orderStatus: "placed",
-            });
-          } catch (e) {
-            console.error("Failed to update status on success:", e);
+          // Retry updateDoc up to 3 times
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              await updateDoc(docRef, {
+                paymentId: response.razorpay_payment_id,
+                paymentStatus: "paid",
+                status: "placed",
+                orderStatus: "placed",
+              });
+              break;
+            } catch (e) {
+              console.error(`updateDoc attempt ${attempt} failed:`, e);
+              if (attempt < 3) {
+                await new Promise(resolve => setTimeout(resolve, 800 * attempt));
+              }
+            }
           }
 
           try {
@@ -255,6 +262,8 @@ export default function PaymentPage() {
             console.error(e);
           }
 
+          // Small delay to ensure Firestore write completes before redirect
+          await new Promise(resolve => setTimeout(resolve, 1500));
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
         },
         prefill: {
