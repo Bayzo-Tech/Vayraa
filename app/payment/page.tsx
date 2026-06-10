@@ -158,7 +158,6 @@ export default function PaymentPage() {
         user?.uid ||
         "guest";
 
-      // Lookup beachId and zoneId in Firestore
       let beachId = "";
       let zoneId = "";
       try {
@@ -182,8 +181,6 @@ export default function PaymentPage() {
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
 
-      // Save order BEFORE payment (guaranteed full details)
-      // Retry setDoc up to 3 times before giving up
       let saveSuccess = false;
       let lastError = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -215,6 +212,7 @@ export default function PaymentPage() {
             beachId: beachId,
             zoneId: zoneId,
             userId: normalizedUserId,
+            razorpayOrderId: "",
           });
           saveSuccess = true;
           break;
@@ -237,12 +235,16 @@ export default function PaymentPage() {
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        handler: async function (response: { razorpay_payment_id: string }) {
-          // Retry updateDoc up to 3 times
+        // ✅ FIXED: handler now captures razorpay_order_id and saves razorpayOrderId
+        handler: async function (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+        }) {
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               await updateDoc(docRef, {
                 paymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
                 paymentStatus: "paid",
                 status: "placed",
                 orderStatus: "placed",
@@ -262,7 +264,6 @@ export default function PaymentPage() {
             console.error(e);
           }
 
-          // Small delay to ensure Firestore write completes before redirect
           await new Promise(resolve => setTimeout(resolve, 1500));
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
         },
@@ -364,7 +365,6 @@ export default function PaymentPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex-shrink-0 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-border">
         <button
           onClick={() => router.back()}
@@ -376,7 +376,6 @@ export default function PaymentPage() {
         <h1 className="text-xl font-bold text-foreground">Checkout</h1>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
@@ -451,7 +450,6 @@ export default function PaymentPage() {
         <div className="h-4" />
       </div>
 
-      {/* Pay Button */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-background">
         <button
           onClick={handlePayment}
