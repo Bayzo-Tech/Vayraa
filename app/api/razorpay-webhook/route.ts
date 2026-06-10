@@ -17,32 +17,27 @@ export async function POST(req: NextRequest) {
     const event = JSON.parse(body);
     if (event.event === "payment.captured") {
       const payment = event.payload.payment.entity;
-      const paymentId = payment.id;
-      const amount = payment.amount / 100;
-      const contact = payment.contact || "";
+      const razorpayOrderId = payment.order_id;
 
-      // Check if order already saved by client
+      // Query the existing order by razorpay_order_id
       const existingOrder = await db
         .collection("orders")
-        .where("paymentId", "==", paymentId)
+        .where("razorpay_order_id", "==", razorpayOrderId)
         .limit(1)
         .get();
 
       if (!existingOrder.empty) {
-        // Order exists — just make sure status is placed
+        // Order exists — update status only, never insert
         const orderDoc = existingOrder.docs[0];
-        if (orderDoc.data().orderStatus === "pending") {
-          await orderDoc.ref.update({
-            orderStatus: "placed",
-            status: "placed",
-            paymentStatus: "paid",
-          });
-        }
+        await orderDoc.ref.update({
+          status: "placed",
+          payment_status: "paid",
+        });
         return NextResponse.json({ status: "updated" });
       }
 
       // Order not found — do NOT create a new document, just log and continue
-      console.warn(`Webhook: No pending order found for paymentId ${paymentId}. Skipping.`);
+      console.warn(`Webhook: No order found for razorpay_order_id ${razorpayOrderId}. Skipping.`);
     }
     return NextResponse.json({ status: "ok" });
   } catch (error) {
