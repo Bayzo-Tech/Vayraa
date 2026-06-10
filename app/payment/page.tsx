@@ -48,9 +48,7 @@ export default function PaymentPage() {
   const [customerName, setCustomerName] = useState("Customer");
   const [customerPhone, setCustomerPhone] = useState("");
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (document.querySelector('script[src*="razorpay"]')) {
@@ -88,9 +86,7 @@ export default function PaymentPage() {
       try {
         let userDoc = await getDoc(doc(db, "users", user.uid));
         if (!userDoc.exists()) {
-          const withPrefix = user.uid.startsWith("91")
-            ? user.uid
-            : `91${user.uid}`;
+          const withPrefix = user.uid.startsWith("91") ? user.uid : `91${user.uid}`;
           userDoc = await getDoc(doc(db, "users", withPrefix));
         }
         if (userDoc.exists()) {
@@ -114,24 +110,17 @@ export default function PaymentPage() {
   }, [user]);
 
   const finalPrice = (item: CartItem) => {
-    if (item.offer > 0)
-      return Math.round(item.price - (item.price * item.offer) / 100);
+    if (item.offer > 0) return Math.round(item.price - (item.price * item.offer) / 100);
     return item.price;
   };
 
-  const subtotal = cart.reduce(
-    (sum, i) => sum + finalPrice(i) * i.quantity,
-    0
-  );
+  const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
   const total = subtotal + deliveryFee;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const getVendorId = async (stallName: string): Promise<string> => {
     try {
-      const q = query(
-        collection(db, "vendors"),
-        where("stallName", "==", stallName)
-      );
+      const q = query(collection(db, "vendors"), where("stallName", "==", stallName));
       const snap = await getDocs(q);
       if (!snap.empty) return snap.docs[0].id;
     } catch (e) {
@@ -145,18 +134,11 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
-      const vendorName =
-        cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
-      const itemsSummary = cart
-        .map((i) => `${i.quantity}x ${i.name}`)
-        .join(", ");
-
+      const vendorName = cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
+      const itemsSummary = cart.map((i) => `${i.quantity}x ${i.name}`).join(", ");
       const vendorId = await getVendorId(vendorName);
-
       const normalizedUserId =
-        user?.phoneNumber?.replace("+91", "91") ||
-        user?.uid ||
-        "guest";
+        user?.phoneNumber?.replace("+91", "91") || user?.uid || "guest";
 
       let beachId = "";
       let zoneId = "";
@@ -186,13 +168,13 @@ export default function PaymentPage() {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           await setDoc(docRef, {
-            orderId: orderId,
+            orderId,
             customerId: user?.uid || normalizedUserId,
-            customerName: customerName,
-            customerPhone: customerPhone,
-            vendorName: vendorName,
-            vendorId: vendorId,
-            itemsSummary: itemsSummary,
+            customerName,
+            customerPhone,
+            vendorName,
+            vendorId,
+            itemsSummary,
             phone: user?.phoneNumber || customerPhone || "unknown",
             location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
             items: cart.map((i) => ({
@@ -209,8 +191,8 @@ export default function PaymentPage() {
             status: "pending",
             orderStatus: "pending",
             createdAt: serverTimestamp(),
-            beachId: beachId,
-            zoneId: zoneId,
+            beachId,
+            zoneId,
             userId: normalizedUserId,
             razorpayOrderId: "",
           });
@@ -219,9 +201,7 @@ export default function PaymentPage() {
         } catch (err) {
           lastError = err;
           console.error(`Firestore pre-save attempt ${attempt} failed:`, err);
-          if (attempt < 3) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
       }
 
@@ -235,50 +215,27 @@ export default function PaymentPage() {
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        // ✅ FIXED: handler now captures razorpay_order_id and saves razorpayOrderId
+        // ✅ FIX: handler-ல updateDoc இல்லை — confirmed page-லயே update ஆகும்
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              await updateDoc(docRef, {
-                paymentId: response.razorpay_payment_id,
-                razorpayOrderId: response.razorpay_order_id,
-                paymentStatus: "paid",
-                status: "placed",
-                orderStatus: "placed",
-              });
-              break;
-            } catch (e) {
-              console.error(`updateDoc attempt ${attempt} failed:`, e);
-              if (attempt < 3) {
-                await new Promise(resolve => setTimeout(resolve, 800 * attempt));
-              }
-            }
-          }
-
           try {
             localStorage.removeItem("bayzo_cart");
           } catch (e) {
             console.error(e);
           }
-
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          window.location.href = `/confirmed?orderId=${orderId}&amount=${total}`;
+          // paymentId + rzpOrderId URL-ல pass பண்றோம் — confirmed page update பண்ணும்
+          window.location.href = `/confirmed?orderId=${orderId}&amount=${total}&paymentId=${response.razorpay_payment_id}&rzpOrderId=${response.razorpay_order_id}`;
         },
         prefill: {
-          contact:
-            customerPhone || user?.phoneNumber?.replace("+91", "") || "",
+          contact: customerPhone || user?.phoneNumber?.replace("+91", "") || "",
         },
         theme: { color: "#FF6B00" },
         modal: {
           ondismiss: async function () {
             try {
-              await updateDoc(docRef, {
-                status: "cancelled",
-                orderStatus: "cancelled",
-              });
+              await updateDoc(docRef, { status: "cancelled", orderStatus: "cancelled" });
             } catch (e) {
               console.error("Failed to update status on dismiss:", e);
             }
@@ -301,9 +258,7 @@ export default function PaymentPage() {
             console.error("Failed to update status on failure:", e);
           } finally {
             setIsProcessing(false);
-            setFailMessage(
-              error?.description || "Payment failed. Please try again."
-            );
+            setFailMessage(error?.description || "Payment failed. Please try again.");
             setShowFailPopup(true);
           }
         });
@@ -325,10 +280,7 @@ export default function PaymentPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="bg-card rounded-3xl p-6 w-full max-w-sm border border-border shadow-2xl">
             <div className="flex justify-end mb-2">
-              <button
-                onClick={() => setShowFailPopup(false)}
-                className="text-muted hover:text-foreground"
-              >
+              <button onClick={() => setShowFailPopup(false)} className="text-muted hover:text-foreground">
                 <X size={20} />
               </button>
             </div>
@@ -336,25 +288,17 @@ export default function PaymentPage() {
               <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
                 <AlertCircle size={36} className="text-red-500" />
               </div>
-              <h2 className="text-xl font-bold text-foreground">
-                Payment Failed
-              </h2>
+              <h2 className="text-xl font-bold text-foreground">Payment Failed</h2>
               <p className="text-sm text-muted">{failMessage}</p>
               <div className="flex gap-3 w-full mt-2">
                 <button
-                  onClick={() => {
-                    setShowFailPopup(false);
-                    router.push("/home");
-                  }}
+                  onClick={() => { setShowFailPopup(false); router.push("/home"); }}
                   className="flex-1 py-3 rounded-2xl border border-border text-foreground font-semibold text-sm"
                 >
                   Go Home
                 </button>
                 <button
-                  onClick={() => {
-                    setShowFailPopup(false);
-                    handlePayment();
-                  }}
+                  onClick={() => { setShowFailPopup(false); handlePayment(); }}
                   className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold text-sm"
                 >
                   Try Again
@@ -383,9 +327,7 @@ export default function PaymentPage() {
           </div>
           <div>
             <p className="text-xs text-muted">Delivering to</p>
-            <p className="font-bold text-foreground">
-              {area} — Zone {zone}
-            </p>
+            <p className="font-bold text-foreground">{area} — Zone {zone}</p>
           </div>
         </div>
 
@@ -400,27 +342,17 @@ export default function PaymentPage() {
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                   {item.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">
-                      No img
-                    </div>
+                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">No img</div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground text-sm line-clamp-1">
-                    {item.name}
-                  </p>
+                  <p className="font-semibold text-foreground text-sm line-clamp-1">{item.name}</p>
                   <p className="text-xs text-muted">🏪 {item.stallName}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="font-bold text-foreground text-sm">
-                    ₹{finalPrice(item) * item.quantity}
-                  </p>
+                  <p className="font-bold text-foreground text-sm">₹{finalPrice(item) * item.quantity}</p>
                   <p className="text-xs text-muted">x{item.quantity}</p>
                 </div>
               </div>
@@ -429,9 +361,7 @@ export default function PaymentPage() {
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
-          <h3 className="font-bold text-foreground border-b border-border pb-2">
-            Bill Summary
-          </h3>
+          <h3 className="font-bold text-foreground border-b border-border pb-2">Bill Summary</h3>
           <div className="flex justify-between text-sm">
             <span className="text-muted">Item Total</span>
             <span className="font-semibold text-foreground">₹{subtotal}</span>
@@ -441,9 +371,7 @@ export default function PaymentPage() {
             <span className="font-semibold text-foreground">₹{deliveryFee}</span>
           </div>
           <div className="border-t border-border pt-3 flex justify-between">
-            <span className="font-bold text-foreground text-base">
-              Total to Pay
-            </span>
+            <span className="font-bold text-foreground text-base">Total to Pay</span>
             <span className="font-black text-foreground text-xl">₹{total}</span>
           </div>
         </div>
@@ -457,13 +385,9 @@ export default function PaymentPage() {
           className="w-full bg-[#00C853] text-white font-bold py-4 rounded-2xl flex items-center justify-between px-6 shadow-lg active:scale-95 transition-all disabled:opacity-70"
         >
           <span className="text-base font-bold">₹{total}</span>
-          <span className="text-lg font-bold">
-            {isProcessing ? "Processing..." : "Pay Now →"}
-          </span>
+          <span className="text-lg font-bold">{isProcessing ? "Processing..." : "Pay Now →"}</span>
         </button>
-        <p className="text-center text-xs text-muted mt-3">
-          🔒 Secured by Razorpay
-        </p>
+        <p className="text-center text-xs text-muted mt-3">🔒 Secured by Razorpay</p>
       </div>
     </div>
   );
