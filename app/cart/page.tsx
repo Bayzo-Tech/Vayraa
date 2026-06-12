@@ -14,6 +14,7 @@ type CartItem = {
   stallName: string;
   foodType?: string;
   quantity: number;
+  packingFee?: number; // ✅ NEW
 };
 
 const VALID_COUPONS: Record<string, number> = {
@@ -24,7 +25,6 @@ const VALID_COUPONS: Record<string, number> = {
 
 export default function CartPage() {
   const router = useRouter();
-  // ✅ FIX: deliveryFee Firebase-லிருந்து வருது
   const { zone, deliveryFee } = useUser();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -57,7 +57,7 @@ export default function CartPage() {
       if (typeof window === "undefined") return;
       try {
         localStorage.setItem("bayzo_cart", JSON.stringify(cart));
-      } catch {}
+      } catch { }
     }
   }, [cart, mounted, isLoaded]);
 
@@ -99,15 +99,20 @@ export default function CartPage() {
     setCouponError("");
   };
 
-  // ✅ FIX: hardcode தீர்த்தோம் - Firebase fee use பண்றோம்
   const subtotal = cart.reduce(
     (sum, i) => sum + finalPrice(i) * i.quantity,
+    0
+  );
+  // ✅ NEW: Packing fee — each item's packingFee × quantity
+  const totalPackingFee = cart.reduce(
+    (sum, i) => sum + (i.packingFee || 0) * i.quantity,
     0
   );
   const discountAmount = appliedCoupon
     ? Math.round((subtotal * couponDiscount) / 100)
     : 0;
-  const total = subtotal + deliveryFee - discountAmount;
+  // ✅ NEW: packingFee included in total
+  const total = subtotal + deliveryFee + totalPackingFee - discountAmount;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   if (!mounted) {
@@ -316,9 +321,15 @@ export default function CartPage() {
             <span className="text-muted">
               Delivery Fee {zone ? `(Zone ${zone})` : ""}
             </span>
-            {/* ✅ FIX: Firebase fee show பண்றோம் */}
             <span className="font-semibold text-foreground">₹{deliveryFee}</span>
           </div>
+          {/* ✅ NEW: Packing Fee line */}
+          {totalPackingFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">📦 Packing Fee</span>
+              <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
+            </div>
+          )}
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-green-500">
