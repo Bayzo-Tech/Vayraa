@@ -34,6 +34,7 @@ type CartItem = {
   image: string;
   stallName: string;
   quantity: number;
+  packingFee?: number; // ✅ NEW
 };
 
 export default function PaymentPage() {
@@ -115,7 +116,10 @@ export default function PaymentPage() {
   };
 
   const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
-  const total = subtotal + deliveryFee;
+  // ✅ NEW: packing fee calculate
+  const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
+  // ✅ NEW: total-ல packing fee add
+  const total = subtotal + deliveryFee + totalPackingFee;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const getVendorId = async (stallName: string): Promise<string> => {
@@ -185,6 +189,7 @@ export default function PaymentPage() {
             })),
             itemTotal: subtotal,
             deliveryFee,
+            packingFee: totalPackingFee, // ✅ NEW: Firestore-லயும் save
             totalAmount: total,
             paymentMethod: "razorpay",
             paymentStatus: "pending",
@@ -215,7 +220,6 @@ export default function PaymentPage() {
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        // ✅ FIX: handler-ல updateDoc இல்லை — confirmed page-லயே update ஆகும்
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
@@ -225,7 +229,6 @@ export default function PaymentPage() {
           } catch (e) {
             console.error(e);
           }
-          // paymentId + rzpOrderId URL-ல pass பண்றோம் — confirmed page update பண்ணும்
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}&paymentId=${response.razorpay_payment_id}&rzpOrderId=${response.razorpay_order_id}`;
         },
         prefill: {
@@ -370,6 +373,13 @@ export default function PaymentPage() {
             <span className="text-muted">Delivery Fee (Zone {zone})</span>
             <span className="font-semibold text-foreground">₹{deliveryFee}</span>
           </div>
+          {/* ✅ NEW: Packing Fee line */}
+          {totalPackingFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">📦 Packing Fee</span>
+              <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
+            </div>
+          )}
           <div className="border-t border-border pt-3 flex justify-between">
             <span className="font-bold text-foreground text-base">Total to Pay</span>
             <span className="font-black text-foreground text-xl">₹{total}</span>
