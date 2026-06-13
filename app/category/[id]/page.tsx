@@ -44,6 +44,7 @@ export default function CategoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [filterType, setFilterType] = useState<"all" | "veg" | "nonveg">("all");
+  const [vendorOpenMap, setVendorOpenMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -93,6 +94,21 @@ export default function CategoryPage() {
       ));
       const allFoods = foodsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Food));
       setFoods(allFoods);
+
+      // ✅ FIX: Array.from instead of spread (downlevelIteration error fix)
+      const uniqueStallNames = Array.from(new Set(allFoods.map(f => f.stallName).filter(Boolean)));
+      if (uniqueStallNames.length > 0) {
+        const vendorsSnap = await getDocs(query(
+          collection(db, "vendors"),
+          where("stallName", "in", uniqueStallNames)
+        ));
+        const openMap: Record<string, boolean> = {};
+        vendorsSnap.docs.forEach(d => {
+          const data = d.data();
+          if (data.stallName) openMap[data.stallName] = data.isOpen || false;
+        });
+        setVendorOpenMap(openMap);
+      }
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -231,81 +247,89 @@ export default function CategoryPage() {
             <p className="font-semibold text-base">No items found</p>
           </div>
         ) : (
-          Object.entries(groupedByStall).map(([stallName, stallFoods]) => (
-            <div key={stallName}>
-              {/* Stall header */}
-              <div className="flex items-center gap-2 py-3 border-b border-border mb-1">
-                <span className="text-lg">🏪</span>
-                <h3 className="font-bold text-foreground text-base">{stallName}</h3>
-                <span className="text-xs text-muted ml-auto">{stallFoods.length} items</span>
-              </div>
+          Object.entries(groupedByStall).map(([stallName, stallFoods]) => {
+            const isStallOpen = vendorOpenMap[stallName] !== false;
 
-              {stallFoods.map((food, idx) => {
-                const qty = getQty(food.id);
-                const price = finalPrice(food);
-                return (
-                  <div key={food.id}
-                    className={`flex gap-4 py-5 ${idx < stallFoods.length - 1 ? "border-b border-border/40" : ""}`}>
-                    {/* Left: food info */}
-                    <div className="flex-1 min-w-0">
-                      {/* Veg/NonVeg icon */}
-                      <span className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center mb-2 ${food.foodType === "nonveg" ? "border-red-500" : "border-green-500"}`}>
-                        <span className={`w-2.5 h-2.5 rounded-full ${food.foodType === "nonveg" ? "bg-red-500" : "bg-green-500"}`}></span>
-                      </span>
-                      {/* ✅ Bigger food name */}
-                      <h4 className="font-bold text-foreground text-base leading-snug mb-1">{food.name}</h4>
-                      {/* ✅ Bigger price */}
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="font-bold text-foreground text-lg">₹{price}</span>
-                        {food.offer > 0 && (
-                          <>
-                            <span className="line-through text-sm text-muted">₹{food.price}</span>
-                            <span className="text-xs text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded-full">{food.offer}% off</span>
-                          </>
-                        )}
-                      </div>
-                      {/* ✅ Description shown */}
-                      {food.description && (
-                        <p className="text-sm text-muted line-clamp-2 leading-relaxed">{food.description}</p>
-                      )}
-                    </div>
+            return (
+              <div key={stallName}>
+                {/* Stall header */}
+                <div className="flex items-center gap-2 py-3 border-b border-border mb-1">
+                  <span className="text-lg">🏪</span>
+                  <h3 className="font-bold text-foreground text-base">{stallName}</h3>
+                  {isStallOpen ? (
+                    <span className="text-xs text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-full ml-1">🟢 Open</span>
+                  ) : (
+                    <span className="text-xs text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full ml-1">🔴 Closed</span>
+                  )}
+                  <span className="text-xs text-muted ml-auto">{stallFoods.length} items</span>
+                </div>
 
-                    {/* Right: image + button */}
-                    <div className="flex-shrink-0 flex flex-col items-center gap-2.5">
-                      <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gray-100 relative shadow-sm">
-                        {food.image ? (
-                          <img src={food.image} alt={food.name} loading="lazy" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs text-center px-2">No Image</div>
-                        )}
-                      </div>
-
-                      {/* ✅ ADD / - qty + button */}
-                      {qty === 0 ? (
-                        <button
-                          onClick={() => addToCart(food)}
-                          className="w-28 py-2 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-md">
-                          <Plus size={15} /> ADD
-                        </button>
-                      ) : (
-                        <div className="w-28 flex items-center justify-between bg-primary rounded-xl px-3 py-2 shadow-md">
-                          <button onClick={() => removeFromCart(food.id)}
-                            className="text-white active:scale-90 transition-transform">
-                            <Minus size={16} />
-                          </button>
-                          <span className="text-white font-bold text-base">{qty}</span>
-                          <button onClick={() => addToCart(food)}
-                            className="text-white active:scale-90 transition-transform">
-                            <Plus size={16} />
-                          </button>
+                {stallFoods.map((food, idx) => {
+                  const qty = getQty(food.id);
+                  const price = finalPrice(food);
+                  return (
+                    <div key={food.id}
+                      className={`flex gap-4 py-5 ${idx < stallFoods.length - 1 ? "border-b border-border/40" : ""} ${!isStallOpen ? "opacity-50" : ""}`}>
+                      {/* Left: food info */}
+                      <div className="flex-1 min-w-0">
+                        <span className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center mb-2 ${food.foodType === "nonveg" ? "border-red-500" : "border-green-500"}`}>
+                          <span className={`w-2.5 h-2.5 rounded-full ${food.foodType === "nonveg" ? "bg-red-500" : "bg-green-500"}`}></span>
+                        </span>
+                        <h4 className="font-bold text-foreground text-base leading-snug mb-1">{food.name}</h4>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="font-bold text-foreground text-lg">₹{price}</span>
+                          {food.offer > 0 && (
+                            <>
+                              <span className="line-through text-sm text-muted">₹{food.price}</span>
+                              <span className="text-xs text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded-full">{food.offer}% off</span>
+                            </>
+                          )}
                         </div>
-                      )}
+                        {food.description && (
+                          <p className="text-sm text-muted line-clamp-2 leading-relaxed">{food.description}</p>
+                        )}
+                      </div>
+
+                      {/* Right: image + button */}
+                      <div className="flex-shrink-0 flex flex-col items-center gap-2.5">
+                        <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gray-100 relative shadow-sm">
+                          {food.image ? (
+                            <img src={food.image} alt={food.name} loading="lazy" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs text-center px-2">No Image</div>
+                          )}
+                        </div>
+
+                        {!isStallOpen ? (
+                          <div className="w-28 py-2 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-xl text-xs font-bold flex items-center justify-center text-center leading-tight px-1">
+                            Currently Closed
+                          </div>
+                        ) : qty === 0 ? (
+                          <button
+                            onClick={() => addToCart(food)}
+                            className="w-28 py-2 bg-primary text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-md">
+                            <Plus size={15} /> ADD
+                          </button>
+                        ) : (
+                          <div className="w-28 flex items-center justify-between bg-primary rounded-xl px-3 py-2 shadow-md">
+                            <button onClick={() => removeFromCart(food.id)}
+                              className="text-white active:scale-90 transition-transform">
+                              <Minus size={16} />
+                            </button>
+                            <span className="text-white font-bold text-base">{qty}</span>
+                            <button onClick={() => addToCart(food)}
+                              className="text-white active:scale-90 transition-transform">
+                              <Plus size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))
+                  );
+                })}
+              </div>
+            );
+          })
         )}
       </div>
 
