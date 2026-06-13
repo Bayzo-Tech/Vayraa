@@ -21,40 +21,42 @@ export async function POST(req: NextRequest) {
 
     if (event.event === "payment.captured") {
       const payment = event.payload.payment.entity;
-      const razorpayOrderId = payment.order_id;
       const razorpayPaymentId = payment.id; // pay_XXXXXXX
 
-      // Try camelCase first (how client saves it)
+      // Query by razorpayPaymentId (client saves this in handler)
       let existingOrder = await db
         .collection("orders")
-        .where("razorpayOrderId", "==", razorpayOrderId)
+        .where("razorpayPaymentId", "==", razorpayPaymentId)
         .limit(1)
         .get();
 
-      // Fallback: try snake_case
+      // Fallback: try razorpay_order_id match
       if (existingOrder.empty) {
-        existingOrder = await db
-          .collection("orders")
-          .where("razorpay_order_id", "==", razorpayOrderId)
-          .limit(1)
-          .get();
+        const razorpayOrderId = payment.order_id;
+        if (razorpayOrderId) {
+          existingOrder = await db
+            .collection("orders")
+            .where("razorpayOrderId", "==", razorpayOrderId)
+            .limit(1)
+            .get();
+        }
       }
 
       if (!existingOrder.empty) {
         const orderDoc = existingOrder.docs[0];
         await orderDoc.ref.update({
           status: "placed",
-          paymentStatus: "paid",        // camelCase — matches your admin panel
-          payment_status: "paid",        // snake_case — fallback
-          razorpayPaymentId: razorpayPaymentId, // This shows Payment ID in admin ✅
+          orderStatus: "placed",
+          paymentStatus: "paid",
+          payment_status: "paid",
+          razorpayPaymentId: razorpayPaymentId,
           updatedAt: new Date().toISOString(),
         });
-
-        console.log(`✅ Webhook: Order ${orderDoc.id} updated to placed+paid`);
+        console.log(`✅ Webhook updated order ${orderDoc.id}`);
         return NextResponse.json({ status: "updated" });
       }
 
-      console.warn(`⚠️ Webhook: No order found for razorpay_order_id ${razorpayOrderId}`);
+      console.warn(`⚠️ No order found for paymentId ${razorpayPaymentId}`);
     }
 
     return NextResponse.json({ status: "ok" });
