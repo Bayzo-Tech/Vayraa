@@ -14,7 +14,6 @@ import {
   where,
   getDocs,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 
 declare global {
@@ -164,55 +163,10 @@ export default function PaymentPage() {
         console.error("Error looking up beach/zone mapping:", err);
       }
 
+      // Generate a Firestore doc ref ahead of time so we have the orderId
+      // for the redirect URL, but do NOT write anything to Firestore yet.
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
-
-      let saveSuccess = false;
-      let lastError = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await setDoc(docRef, {
-            orderId,
-            customerId: user?.uid || normalizedUserId,
-            customerName,
-            customerPhone,
-            vendorName,
-            vendorId,
-            itemsSummary,
-            phone: user?.phoneNumber || customerPhone || "unknown",
-            location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
-            items: cart.map((i) => ({
-              name: i.name,
-              price: finalPrice(i),
-              quantity: i.quantity,
-              stallName: i.stallName,
-            })),
-            itemTotal: subtotal,
-            deliveryFee,
-            packingFee: totalPackingFee, // ✅ NEW: Firestore-லயும் save
-            totalAmount: total,
-            paymentMethod: "razorpay",
-            paymentStatus: "pending",
-            status: "pending",
-            orderStatus: "pending",
-            createdAt: serverTimestamp(),
-            beachId,
-            zoneId,
-            userId: normalizedUserId,
-            razorpayOrderId: "",
-          });
-          saveSuccess = true;
-          break;
-        } catch (err) {
-          lastError = err;
-          console.error(`Firestore pre-save attempt ${attempt} failed:`, err);
-          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-      }
-
-      if (!saveSuccess) {
-        console.error("All 3 Firestore pre-save attempts failed:", lastError);
-      }
 
       const options: Record<string, unknown> = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -224,6 +178,55 @@ export default function PaymentPage() {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
+          // ✅ Order is saved to Firestore ONLY after payment succeeds
+          let saveSuccess = false;
+          let lastError = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              await setDoc(docRef, {
+                orderId,
+                customerId: user?.uid || normalizedUserId,
+                customerName,
+                customerPhone,
+                vendorName,
+                vendorId,
+                itemsSummary,
+                phone: user?.phoneNumber || customerPhone || "unknown",
+                location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
+                items: cart.map((i) => ({
+                  name: i.name,
+                  price: finalPrice(i),
+                  quantity: i.quantity,
+                  stallName: i.stallName,
+                })),
+                itemTotal: subtotal,
+                deliveryFee,
+                packingFee: totalPackingFee, // ✅ NEW: Firestore-லயும் save
+                totalAmount: total,
+                paymentMethod: "razorpay",
+                paymentStatus: "paid",
+                status: "placed",
+                orderStatus: "placed",
+                createdAt: serverTimestamp(),
+                beachId,
+                zoneId,
+                userId: normalizedUserId,
+                razorpayOrderId: response.razorpay_order_id || "",
+                razorpayPaymentId: response.razorpay_payment_id || "",
+              });
+              saveSuccess = true;
+              break;
+            } catch (err) {
+              lastError = err;
+              console.error(`Firestore save attempt ${attempt} failed:`, err);
+              if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+          }
+
+          if (!saveSuccess) {
+            console.error("All 3 Firestore save attempts failed:", lastError);
+          }
+
           try {
             localStorage.removeItem("bayzo_cart");
           } catch (e) {
@@ -236,12 +239,8 @@ export default function PaymentPage() {
         },
         theme: { color: "#FF6B00" },
         modal: {
-          ondismiss: async function () {
-            try {
-              await updateDoc(docRef, { status: "cancelled", orderStatus: "cancelled" });
-            } catch (e) {
-              console.error("Failed to update status on dismiss:", e);
-            }
+          ondismiss: function () {
+            // ✅ Payment cancelled/modal closed — no order was created, just reset state
             setIsProcessing(false);
           },
         },
@@ -249,21 +248,12 @@ export default function PaymentPage() {
 
       try {
         const rzp = new window.Razorpay(options);
-        rzp.on("payment.failed", async (response: Record<string, unknown>) => {
+        rzp.on("payment.failed", (response: Record<string, unknown>) => {
           const error = response.error as { code?: string; description?: string } | undefined;
-          try {
-            await updateDoc(docRef, {
-              status: "failed",
-              orderStatus: "failed",
-              paymentStatus: "failed",
-            });
-          } catch (e) {
-            console.error("Failed to update status on failure:", e);
-          } finally {
-            setIsProcessing(false);
-            setFailMessage(error?.description || "Payment failed. Please try again.");
-            setShowFailPopup(true);
-          }
+          // ✅ Payment failed — no order was created, just show failure UI
+          setIsProcessing(false);
+          setFailMessage(error?.description || "Payment failed. Please try again.");
+          setShowFailPopup(true);
         });
         rzp.open();
       } catch {
