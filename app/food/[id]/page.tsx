@@ -17,6 +17,7 @@ type FoodItem = {
   foodType?: string;
   rating?: number;
   description?: string;
+  packingFee?: number;
 };
 
 type CartItem = FoodItem & { quantity: number };
@@ -33,7 +34,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
     setMounted(true);
   }, []);
 
-  // Firebase-லிருந்து food fetch பண்றோம்
   useEffect(() => {
     const fetchFood = async () => {
       try {
@@ -54,7 +54,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
     fetchFood();
   }, [params.id]);
 
-  // Cart-லிருந்து current quantity எடுக்கறோம்
   useEffect(() => {
     if (!mounted || !food) return;
     if (typeof window === "undefined") return;
@@ -90,13 +89,11 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
     const idx = cart.findIndex((i) => i.id === food.id);
 
     if (newQty <= 0) {
-      // Remove from cart
       cart = cart.filter((i) => i.id !== food.id);
     } else if (idx >= 0) {
-      // Update quantity
       cart[idx].quantity = newQty;
     } else {
-      // ✅ FIX: stallName உள்பட எல்லாம் save பண்றோம்
+      // ✅ FIX: packingFee save பண்றோம்
       cart.push({
         id: food.id,
         name: food.name,
@@ -105,6 +102,7 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
         image: food.image || "",
         stallName: food.stallName || "",
         foodType: food.foodType || "veg",
+        packingFee: food.packingFee || 0,
         quantity: newQty,
       });
     }
@@ -135,7 +133,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-24 relative">
-      {/* Top Image */}
       <div className="relative h-72 w-full bg-card">
         <button
           onClick={() => router.back()}
@@ -163,11 +160,9 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Details */}
       <div className="p-6 flex-1 bg-background -mt-6 rounded-t-3xl relative z-10">
         <div className="flex justify-between items-start mb-2">
           <div className="flex-1 pr-2">
-            {/* Veg/NonVeg indicator */}
             <div className="flex items-center gap-2 mb-1">
               <span
                 className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center flex-shrink-0 ${food.foodType === "nonveg" ? "border-red-500" : "border-green-500"
@@ -200,13 +195,20 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
+        {/* ✅ Packing fee display */}
+        {food.packingFee && food.packingFee > 0 ? (
+          <div className="mb-4 bg-card rounded-xl border border-border px-3 py-2 flex items-center gap-2">
+            <span className="text-sm">📦</span>
+            <span className="text-xs text-muted">Packing fee: ₹{food.packingFee} per item</span>
+          </div>
+        ) : null}
+
         <h3 className="font-bold text-lg mb-2">Description</h3>
         <p className="text-muted leading-relaxed text-sm">
           {food.description ||
             `Delicious ${food.name.toLowerCase()} prepared fresh for you. Perfect to enjoy while relaxing at the beach.`}
         </p>
 
-        {/* Location info */}
         {area && zone && (
           <div className="mt-4 bg-card rounded-xl border border-border p-3 flex items-center gap-2">
             <span className="text-lg">📍</span>
@@ -218,7 +220,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Bottom Action */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border z-50">
         {quantity === 0 ? (
           <button
