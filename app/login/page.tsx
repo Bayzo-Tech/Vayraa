@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithCustomToken } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { ArrowLeft } from "lucide-react";
@@ -15,19 +15,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/home";
 
   // ✅ Problem 5 Fix: Already logged in? Redirect to home
   useEffect(() => {
     setMounted(true);
     const hasSession = typeof document !== "undefined" && document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
     if (hasSession) {
-      router.replace("/home");
+      router.replace(redirect);
       return;
     }
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        router.replace("/home");
+        router.replace(redirect);
       } else {
         setCheckingAuth(false);
       }
@@ -115,9 +117,13 @@ export default function LoginPage() {
         }
 
         if (data.profileComplete) {
-          router.replace("/home");
+          router.replace(redirect);
         } else {
-          router.replace("/basic-details");
+          const nextUrl =
+            redirect !== "/home"
+              ? `/basic-details?redirect=${encodeURIComponent(redirect)}`
+              : "/basic-details";
+          router.replace(nextUrl);
         }
       } else {
         setError(data.message || "Invalid OTP. Please try again.");

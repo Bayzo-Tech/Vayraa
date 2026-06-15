@@ -41,12 +41,17 @@ export function Navbar() {
           </Link>
         )}
         
-        <Link 
-          href="/history" 
+        <button
+          onClick={() => {
+            const hasSession = document.cookie
+              .split("; ")
+              .some((row) => row.trim().startsWith("bayzo_session="));
+            router.push(hasSession ? "/history" : "/login?redirect=/history");
+          }}
           className="p-2 bg-gradient-to-tr from-orange-500/20 to-orange-500/10 hover:from-orange-500/30 hover:to-orange-500/20 rounded-full border border-orange-500/30 transition-all duration-300 shadow-sm shadow-orange-500/10 active:scale-95 group"
         >
           <ScrollText size={20} className="text-primary group-hover:scale-110 transition-transform duration-300" />
-        </Link>
+        </button>
 
         <Link href="/cart" className="relative p-2 bg-card rounded-full border border-border">
           <ShoppingCart size={20} className="text-foreground" />

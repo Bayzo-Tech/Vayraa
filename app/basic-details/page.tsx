@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ArrowLeft } from "lucide-react";
 
 export default function BasicDetailsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/home";
   const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
 
@@ -85,8 +87,7 @@ export default function BasicDetailsPage() {
         }
       }
 
-      // ✅ Navigate to area selection
-      router.push("/area");
+      router.push(redirect);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save. Please try again.";
       setErrors({ form: message });

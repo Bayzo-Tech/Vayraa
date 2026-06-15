@@ -351,7 +351,27 @@ export default function CartPage() {
 
       <div className="flex-shrink-0 p-4 bg-background border-t border-border">
         <button
-          onClick={() => router.push("/payment")}
+          onClick={() => {
+            const hasSession = document.cookie
+              .split("; ")
+              .some((row) => row.trim().startsWith("bayzo_session="));
+
+            if (!hasSession) {
+              router.push("/login?redirect=/payment");
+              return;
+            }
+
+            try {
+              const userStr = localStorage.getItem("user");
+              const localUser = userStr ? JSON.parse(userStr) : {};
+              if (!localUser.profileComplete) {
+                router.push("/basic-details?redirect=/payment");
+                return;
+              }
+            } catch {}
+
+            router.push("/payment");
+          }}
           className="w-full bg-primary text-white font-bold py-4 rounded-2xl flex items-center justify-between px-5 shadow-lg active:scale-95 transition-all"
         >
           <span className="text-sm font-semibold">₹{total} total</span>
