@@ -7,7 +7,6 @@ import { auth } from "@/lib/firebase";
 export default function OnboardingPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -16,28 +15,24 @@ export default function OnboardingPage() {
     const hasSession = typeof document !== "undefined" && document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
     
     if (hasSession) {
-      router.replace("/home");
+      setTimeout(() => router.replace("/home"), 2000);
       return;
     }
 
     // Subscribe to firebase auth state
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        router.replace("/home");
+        setTimeout(() => router.replace("/home"), 2000);
       } else {
         const savedArea = (() => {
           try { return localStorage.getItem("bayzo_area"); } catch { return null; }
         })();
-        router.replace(savedArea ? "/home" : "/area");
+        setTimeout(() => router.replace(savedArea ? "/home" : "/area"), 2000);
       }
     });
 
     return () => unsubscribe();
   }, [router]);
-
-  if (loading) {
-    return null; // Skipping splash completely for logged-in users
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-teal-900 via-background to-background flex flex-col items-center justify-center p-6 relative overflow-hidden">

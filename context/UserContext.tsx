@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { User } from "firebase/auth";
 
 interface UserContextType {
@@ -40,6 +40,7 @@ const safeLocalStorage = {
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const isFirstAuthCheck = useRef(true);
   const [area, setArea] = useState<string>("");
   const [zone, setZone] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        isFirstAuthCheck.current = false;
         try {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           if (userDoc.exists()) {
@@ -87,11 +89,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           setRole("user");
         }
       } else {
-        document.cookie = "bayzo_session=; path=/; max-age=0";
-        safeLocalStorage.remove("bayzo_token");
-        safeLocalStorage.remove("user");
-        setUser(null);
-        setRole(null);
+        if (isFirstAuthCheck.current) {
+          isFirstAuthCheck.current = false;
+          setUser(null);
+          setRole(null);
+        } else {
+          document.cookie = "bayzo_session=; path=/; max-age=0";
+          safeLocalStorage.remove("bayzo_token");
+          safeLocalStorage.remove("user");
+          setUser(null);
+          setRole(null);
+        }
       }
     });
 
@@ -110,16 +118,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const q = query(collection(db, "beaches"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let foundFee = 10;
-      snapshot.docs.forEach((beachDoc) => {
+      const matchedBeach = snapshot.docs.find((beachDoc) => {
         const beachData = beachDoc.data();
-        if (beachData.area === area || beachData.name === area) {
-          const zones: { fee?: number; name?: string }[] = beachData.zones || [];
-          const matchedZone = zones[zone - 1];
-          if (matchedZone && matchedZone.fee !== undefined) {
-            foundFee = Number(matchedZone.fee);
-          }
-        }
+        return beachData.name === area || beachData.area === area;
       });
+      if (matchedBeach) {
+        const zones: { fee?: number; name?: string }[] = matchedBeach.data().zones || [];
+        const matchedZone = zones[zone - 1];
+        if (matchedZone && matchedZone.fee !== undefined) {
+          foundFee = Number(matchedZone.fee);
+        }
+      }
       setDeliveryFee(foundFee);
       safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
     }, (error) => {
@@ -159,16 +168,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const targetArea = beachArea || area;
       const beachSnap = await getDocs(collection(db, "beaches"));
       let foundFee = 10;
-      beachSnap.docs.forEach((beachDoc) => {
+      const matchedBeach = beachSnap.docs.find((beachDoc) => {
         const beachData = beachDoc.data();
-        if (beachData.area === targetArea || beachData.name === targetArea) {
-          const zones: { fee?: number; name?: string }[] = beachData.zones || [];
-          const matchedZone = zones[newZone - 1];
-          if (matchedZone && matchedZone.fee !== undefined) {
-            foundFee = Number(matchedZone.fee);
-          }
-        }
+        return beachData.name === targetArea || beachData.area === targetArea;
       });
+      if (matchedBeach) {
+        const zones: { fee?: number; name?: string }[] = matchedBeach.data().zones || [];
+        const matchedZone = zones[newZone - 1];
+        if (matchedZone && matchedZone.fee !== undefined) {
+          foundFee = Number(matchedZone.fee);
+        }
+      }
       setDeliveryFee(foundFee);
       if (mounted) {
         safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
