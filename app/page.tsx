@@ -25,12 +25,10 @@ export default function OnboardingPage() {
       if (user) {
         router.replace("/home");
       } else {
-        setLoading(false);
-        // Automatically redirect to login after 2 seconds only if not logged in
-        const timer = setTimeout(() => {
-          router.replace("/login");
-        }, 2000);
-        return () => clearTimeout(timer);
+        const savedArea = (() => {
+          try { return localStorage.getItem("bayzo_area"); } catch { return null; }
+        })();
+        router.replace(savedArea ? "/home" : "/area");
       }
     });
 
