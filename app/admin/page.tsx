@@ -18,7 +18,7 @@ interface Order {
   paymentId: string;
   paymentStatus: string;
   orderStatus: string;
-  createdAt: any;
+  createdAt: { toDate: () => Date } | null;
 }
 
 const STATUS_OPTIONS = ["placed", "preparing", "out for delivery", "delivered"];

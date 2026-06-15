@@ -15,7 +15,7 @@ export interface FoodItem {
   area: string;
   offer?: string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface FoodCardProps {

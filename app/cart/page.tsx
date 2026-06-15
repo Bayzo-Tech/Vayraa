@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Minus, Trash2, ShoppingBag, Tag, X } from "lucide-react";
+import Image from "next/image";
 import { useUser } from "@/context/UserContext";
 
 type CartItem = {
@@ -173,12 +174,13 @@ export default function CartPage() {
                 key={item.id}
                 className="bg-card rounded-2xl border border-border p-3 flex gap-3"
               >
-                <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 relative">
                   {item.image ? (
-                    <img
+                    <Image
                       src={item.image}
                       alt={item.name}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-gray-300">

@@ -35,6 +35,7 @@ function LoginPageContent() {
       }
     });
     return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const handleSendOtp = async (e: React.FormEvent) => {

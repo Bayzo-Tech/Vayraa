@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { Navbar } from "@/components/Navbar";
@@ -108,7 +109,7 @@ export default function HomePage() {
                 className="bg-card rounded-2xl overflow-hidden border border-border shadow-sm flex flex-col cursor-pointer hover:border-primary transition-colors active:scale-95">
                 <div className="relative h-32 w-full bg-gray-100 flex items-center justify-center">
                   {cat.image ? (
-                    <img src={cat.image} alt={cat.name} loading="lazy" className="w-full h-full object-cover" />
+                    <Image src={cat.image} alt={cat.name} fill className="object-cover" />
                   ) : (
                     <span className="text-gray-400 text-sm">No Image</span>
                   )}

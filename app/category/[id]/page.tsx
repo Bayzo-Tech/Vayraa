@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
@@ -74,12 +75,7 @@ export default function CategoryPage() {
     }
   }, [cart, mounted, isLoaded]);
 
-  useEffect(() => {
-    if (!area) { router.replace("/area"); return; }
-    fetchData();
-  }, [categoryId, area]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const catDoc = await getDoc(doc(db, "categories", categoryId));
@@ -114,7 +110,12 @@ export default function CategoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [area, categoryId]);
+
+  useEffect(() => {
+    if (!area) { router.replace("/area"); return; }
+    fetchData();
+  }, [area, categoryId, router, fetchData]);
 
   const addToCart = (food: Food) => {
     setCart(prev => {
@@ -181,7 +182,7 @@ export default function CategoryPage() {
       {/* Category Banner */}
       {category?.image && (
         <div className="relative h-44 w-full overflow-hidden">
-          <img src={category.image} alt={category.name} fetchPriority="high" className="w-full h-full object-cover" />
+          <Image src={category.image} alt={category.name} fill priority className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
           <div className="absolute bottom-4 left-4">
             <h2 className="text-white font-bold text-2xl">{category.name}</h2>
@@ -294,7 +295,7 @@ export default function CategoryPage() {
                       <div className="flex-shrink-0 flex flex-col items-center gap-2.5">
                         <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gray-100 relative shadow-sm">
                           {food.image ? (
-                            <img src={food.image} alt={food.name} loading="lazy" className="w-full h-full object-cover" />
+                            <Image src={food.image} alt={food.name} fill className="object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs text-center px-2">No Image</div>
                           )}

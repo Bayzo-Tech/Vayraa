@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { ArrowLeft, Copy, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
@@ -14,7 +14,7 @@ interface Order {
   totalAmount: number;
   paymentId: string;
   orderStatus: string;
-  createdAt: any;
+  createdAt: { toDate: () => Date; toMillis?: () => number; seconds?: number } | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -101,7 +101,7 @@ export default function OrdersPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const formatDate = (timestamp: any) => {
+  const formatDate = (timestamp: { toDate: () => Date } | null) => {
     if (!timestamp) return "Just now";
     const date = timestamp.toDate();
     return new Intl.DateTimeFormat("en-US", {
@@ -139,7 +139,7 @@ export default function OrdersPage() {
           <div className="flex flex-col items-center justify-center h-[60vh] text-center">
             <span className="text-6xl mb-4">🏖️</span>
             <h2 className="text-xl font-semibold mb-2">No orders yet</h2>
-            <p className="text-muted">Looks like you haven't placed any orders.</p>
+            <p className="text-muted">Looks like you haven&apos;t placed any orders.</p>
             <Link
               href="/home"
               className="mt-6 bg-primary text-white px-6 py-3 rounded-full font-semibold active:scale-95 transition-transform"

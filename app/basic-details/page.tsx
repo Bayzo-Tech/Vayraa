@@ -9,7 +9,6 @@ import { ArrowLeft } from "lucide-react";
 function BasicDetailsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/home";
   const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
 

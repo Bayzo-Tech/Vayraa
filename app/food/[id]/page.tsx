@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Star, Plus, Minus } from "lucide-react";
 import { db } from "@/lib/firebase";
@@ -52,7 +53,7 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
       }
     };
     fetchFood();
-  }, [params.id]);
+  }, [params.id, router]);
 
   useEffect(() => {
     if (!mounted || !food) return;
@@ -142,10 +143,11 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
         </button>
 
         {food.image ? (
-          <img
+          <Image
             src={food.image}
             alt={food.name}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-4xl bg-card">

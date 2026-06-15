@@ -24,10 +24,7 @@ export default function OnboardingPage() {
       if (user) {
         setTimeout(() => router.replace("/home"), 2000);
       } else {
-        const savedArea = (() => {
-          try { return localStorage.getItem("bayzo_area"); } catch { return null; }
-        })();
-        setTimeout(() => router.replace(savedArea ? "/home" : "/area"), 2000);
+        setTimeout(() => router.replace("/area"), 2000);
       }
     });
 

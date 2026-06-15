@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 
 declare global {
+    // eslint-disable-next-line no-var
     var handoverOtpStore: Map<string, { otp: string; expiry: number; orderId: string }>;
 }
 if (!global.handoverOtpStore) {
