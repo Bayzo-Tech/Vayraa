@@ -87,7 +87,7 @@ function BasicDetailsPageContent() {
         }
       }
 
-      router.push(redirect);
+      router.push(searchParams.get("redirect") || "/home");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save. Please try again.";
       setErrors({ form: message });

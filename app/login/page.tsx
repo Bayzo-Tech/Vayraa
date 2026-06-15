@@ -116,12 +116,13 @@ function LoginPageContent() {
           }
         }
 
+        const currentRedirect = searchParams.get("redirect") || "/home";
         if (data.profileComplete) {
-          router.replace(redirect);
+          router.replace(currentRedirect);
         } else {
           const nextUrl =
-            redirect !== "/home"
-              ? `/basic-details?redirect=${encodeURIComponent(redirect)}`
+            currentRedirect !== "/home"
+              ? `/basic-details?redirect=${encodeURIComponent(currentRedirect)}`
               : "/basic-details";
           router.replace(nextUrl);
         }
