@@ -20,26 +20,22 @@ export async function POST(request: Request) {
       createdAt: new Date(),
     });
 
+    const params = new URLSearchParams({
+      authorization: process.env.FAST2SMS_API_KEY!,
+      variables_values: otp,
+      route: 'q',
+      numbers: phone,
+    });
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': process.env.FAST2SMS_API_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        route: 'q_json',
-        message: `Your Vayra OTP is ${otp}. Valid for 10 minutes. Do not share with anyone.`,
-        language: 'english',
-        flash: 0,
-        numbers: phone,
-      }),
+    fetch(`https://www.fast2sms.com/dev/bulkV2?${params.toString()}`, {
+      method: 'GET',
       signal: controller.signal,
     })
       .then(res => res.json())
-      .then(data => { clearTimeout(timeoutId); console.log('Fast2SMS response:', JSON.stringify(data)); })
+      .then(data => { clearTimeout(timeoutId); console.log('Fast2SMS:', JSON.stringify(data)); })
       .catch(err => { clearTimeout(timeoutId); console.error('Fast2SMS error:', err); });
 
     return NextResponse.json({ success: true });
