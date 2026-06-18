@@ -23,8 +23,10 @@ export async function POST(request: Request) {
     const params = new URLSearchParams({
       authorization: process.env.FAST2SMS_API_KEY!,
       variables_values: otp,
-      route: 'q',
+      route: 'dlt',
       numbers: phone,
+      message: '519163',
+      sender_id: 'VAYRA',
     });
 
     const controller = new AbortController();
@@ -35,8 +37,14 @@ export async function POST(request: Request) {
       signal: controller.signal,
     })
       .then(res => res.json())
-      .then(data => { clearTimeout(timeoutId); console.log('Fast2SMS:', JSON.stringify(data)); })
-      .catch(err => { clearTimeout(timeoutId); console.error('Fast2SMS error:', err); });
+      .then(data => {
+        clearTimeout(timeoutId);
+        console.log('Fast2SMS:', JSON.stringify(data));
+      })
+      .catch(err => {
+        clearTimeout(timeoutId);
+        console.error('Fast2SMS error:', err);
+      });
 
     return NextResponse.json({ success: true });
 
