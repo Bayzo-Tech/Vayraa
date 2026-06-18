@@ -25,8 +25,8 @@ export async function POST(request: Request) {
       variables_values: otp,
       route: 'dlt',
       numbers: phone,
-      message: '519163',
-      sender_id: 'VAYRA',
+      message: '214466',
+      sender_id: 'VAYRAA',
     });
 
     try {
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
       console.log('Fast2SMS:', JSON.stringify(data));
     } catch (smsErr) {
       console.error('Fast2SMS error:', smsErr);
-      // SMS fail ஆனாலும் OTP Firestore-ல save ஆகிடும்
     }
 
     return NextResponse.json({ success: true });
