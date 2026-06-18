@@ -29,22 +29,17 @@ export async function POST(request: Request) {
       sender_id: 'VAYRA',
     });
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    fetch(`https://www.fast2sms.com/dev/bulkV2?${params.toString()}`, {
-      method: 'GET',
-      signal: controller.signal,
-    })
-      .then(res => res.json())
-      .then(data => {
-        clearTimeout(timeoutId);
-        console.log('Fast2SMS:', JSON.stringify(data));
-      })
-      .catch(err => {
-        clearTimeout(timeoutId);
-        console.error('Fast2SMS error:', err);
-      });
+    try {
+      const res = await fetch(
+        `https://www.fast2sms.com/dev/bulkV2?${params.toString()}`,
+        { method: 'GET' }
+      );
+      const data = await res.json();
+      console.log('Fast2SMS:', JSON.stringify(data));
+    } catch (smsErr) {
+      console.error('Fast2SMS error:', smsErr);
+      // SMS fail ஆனாலும் OTP Firestore-ல save ஆகிடும்
+    }
 
     return NextResponse.json({ success: true });
 
