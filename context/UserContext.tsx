@@ -59,8 +59,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (savedZone) setZone(Number(savedZone));
     if (savedFee) setDeliveryFee(Number(savedFee));
 
+    let logoutTimer: ReturnType<typeof setTimeout> | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; }
         isFirstAuthCheck.current = false;
         try {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
@@ -89,21 +92,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           setRole("user");
         }
       } else {
-        if (isFirstAuthCheck.current) {
-          isFirstAuthCheck.current = false;
-          setUser(null);
-          setRole(null);
-        } else {
-          document.cookie = "bayzo_session=; path=/; max-age=0";
-          safeLocalStorage.remove("bayzo_token");
-          safeLocalStorage.remove("user");
-          setUser(null);
-          setRole(null);
-        }
+        logoutTimer = setTimeout(() => {
+          if (isFirstAuthCheck.current) {
+            isFirstAuthCheck.current = false;
+            setUser(null);
+            setRole(null);
+          } else {
+            document.cookie = "bayzo_session=; path=/; max-age=0";
+            safeLocalStorage.remove("bayzo_token");
+            safeLocalStorage.remove("user");
+            setUser(null);
+            setRole(null);
+          }
+        }, 3000);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (logoutTimer) clearTimeout(logoutTimer);
+    };
   }, [mounted]);
 
   // Real-time listener for the delivery fee based on area and zone

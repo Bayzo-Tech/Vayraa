@@ -134,6 +134,11 @@ export default function PaymentPage() {
 
   const handlePayment = async () => {
     if (!razorpayLoaded || isProcessing) return;
+    if (!user) {
+      setFailMessage("Session loading, please wait a moment and try again.");
+      setShowFailPopup(true);
+      return;
+    }
     setIsProcessing(true);
 
     try {

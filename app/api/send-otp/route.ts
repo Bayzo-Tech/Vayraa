@@ -14,30 +14,30 @@ export async function POST(request: Request) {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // ✅ FIX: Firestore-ல save பண்றோம் - Vercel serverless safe
-    await adminDb.collection('otpStore').doc(phone).set({
-      otp,
-      expiry: Date.now() + 10 * 60 * 1000,
-      createdAt: new Date(),
-    });
-
-    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': process.env.FAST2SMS_API_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        route: 'dlt',
-        sender_id: 'VAYRAA',
-        message: '214466',
-        variables_values: otp,
-        flash: 0,
-        numbers: phone,
+    const [, smsResponse] = await Promise.all([
+      adminDb.collection('otpStore').doc(phone).set({
+        otp,
+        expiry: Date.now() + 10 * 60 * 1000,
+        createdAt: new Date(),
       }),
-    });
+      fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': process.env.FAST2SMS_API_KEY!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          route: 'dlt',
+          sender_id: 'VAYRAA',
+          message: '214466',
+          variables_values: otp,
+          flash: 0,
+          numbers: phone,
+        }),
+      }),
+    ]);
 
-    const data = await response.json();
+    const data = await smsResponse.json();
     console.log('Fast2SMS response:', JSON.stringify(data));
 
     if (data.return === true) {
