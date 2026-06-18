@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/send-otp/route.ts": {
+      "regions": ["bom1"]
+    }
+  }
+}

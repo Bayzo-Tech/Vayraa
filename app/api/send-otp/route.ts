@@ -14,40 +14,35 @@ export async function POST(request: Request) {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const [, smsResponse] = await Promise.all([
-      adminDb.collection('otpStore').doc(phone).set({
-        otp,
-        expiry: Date.now() + 10 * 60 * 1000,
-        createdAt: new Date(),
-      }),
-      fetch('https://www.fast2sms.com/dev/bulkV2', {
-        method: 'POST',
-        headers: {
-          'authorization': process.env.FAST2SMS_API_KEY!,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          route: 'dlt',
-          sender_id: 'VAYRAA',
-          message: '214466',
-          variables_values: otp,
-          flash: 0,
-          numbers: phone,
-        }),
-      }),
-    ]);
+    await adminDb.collection('otpStore').doc(phone).set({
+      otp,
+      expiry: Date.now() + 10 * 60 * 1000,
+      createdAt: new Date(),
+    });
 
-    const data = await smsResponse.json();
-    console.log('Fast2SMS response:', JSON.stringify(data));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (data.return === true) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json(
-        { success: false, message: data.message?.[0] || 'OTP அனுப்ப முடியல' },
-        { status: 400 }
-      );
-    }
+    fetch('https://www.fast2sms.com/dev/bulkV2', {
+      method: 'POST',
+      headers: {
+        'authorization': process.env.FAST2SMS_API_KEY!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        route: 'q_json',
+        message: `Your Vayra OTP is ${otp}. Valid for 10 minutes. Do not share with anyone.`,
+        language: 'english',
+        flash: 0,
+        numbers: phone,
+      }),
+      signal: controller.signal,
+    })
+      .then(res => res.json())
+      .then(data => { clearTimeout(timeoutId); console.log('Fast2SMS response:', JSON.stringify(data)); })
+      .catch(err => { clearTimeout(timeoutId); console.error('Fast2SMS error:', err); });
+
+    return NextResponse.json({ success: true });
 
   } catch (error) {
     console.error('Send OTP Error:', error);
