@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
-import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ArrowLeft, Plus, Minus, ShoppingCart } from "lucide-react";
 
@@ -92,19 +92,6 @@ export default function CategoryPage() {
       setFoods(allFoods);
 
       // ✅ FIX: Array.from instead of spread (downlevelIteration error fix)
-      const uniqueStallNames = Array.from(new Set(allFoods.map(f => f.stallName).filter(Boolean)));
-      if (uniqueStallNames.length > 0) {
-        const vendorsSnap = await getDocs(query(
-          collection(db, "vendors"),
-          where("stallName", "in", uniqueStallNames)
-        ));
-        const openMap: Record<string, boolean> = {};
-        vendorsSnap.docs.forEach(d => {
-          const data = d.data();
-          if (data.stallName) openMap[data.stallName] = data.isOpen || false;
-        });
-        setVendorOpenMap(openMap);
-      }
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -116,6 +103,24 @@ export default function CategoryPage() {
     if (!area) { router.replace("/area"); return; }
     fetchData();
   }, [area, categoryId, router, fetchData]);
+
+  // ✅ Real-time vendor isOnDuty listener — rebuilds vendorOpenMap on every Firestore update
+  useEffect(() => {
+    const uniqueStallNames = Array.from(new Set(foods.map(f => f.stallName).filter(Boolean)));
+    if (uniqueStallNames.length === 0) return;
+    const unsubscribe = onSnapshot(
+      query(collection(db, "vendors"), where("stallName", "in", uniqueStallNames)),
+      (snapshot) => {
+        const openMap: Record<string, boolean> = {};
+        snapshot.docs.forEach(d => {
+          const data = d.data();
+          if (data.stallName) openMap[data.stallName] = data.isOnDuty || false;
+        });
+        setVendorOpenMap(openMap);
+      }
+    );
+    return () => unsubscribe();
+  }, [foods]);
 
   const addToCart = (food: Food) => {
     setCart(prev => {
@@ -270,7 +275,7 @@ export default function CategoryPage() {
                   const price = finalPrice(food);
                   return (
                     <div key={food.id}
-                      className={`flex gap-4 py-5 ${idx < stallFoods.length - 1 ? "border-b border-border/40" : ""} ${!isStallOpen ? "opacity-50" : ""}`}>
+                      className={`flex gap-4 py-5 ${idx < stallFoods.length - 1 ? "border-b border-border/40" : ""}`}>
                       {/* Left: food info */}
                       <div className="flex-1 min-w-0">
                         <span className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center mb-2 ${food.foodType === "nonveg" ? "border-red-500" : "border-green-500"}`}>
@@ -295,7 +300,7 @@ export default function CategoryPage() {
                       <div className="flex-shrink-0 flex flex-col items-center gap-2.5">
                         <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gray-100 relative shadow-sm">
                           {food.image ? (
-                            <Image src={food.image} alt={food.name} fill className="object-cover" />
+                            <Image src={food.image} alt={food.name} fill className={`object-cover ${!isStallOpen ? "grayscale" : ""}`} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs text-center px-2">No Image</div>
                           )}
