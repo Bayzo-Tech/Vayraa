@@ -47,6 +47,7 @@ export default function PaymentPage() {
   const [failMessage, setFailMessage] = useState("");
   const [customerName, setCustomerName] = useState("Customer");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -77,6 +78,10 @@ export default function PaymentPage() {
     } catch (e) {
       console.error(e);
       router.replace("/cart");
+    }
+    const savedOrderType = localStorage.getItem("vayra_order_type");
+    if (savedOrderType === "dinein" || savedOrderType === "takeaway") {
+      setOrderType(savedOrderType);
     }
   }, [mounted, router]);
 
@@ -117,8 +122,10 @@ export default function PaymentPage() {
   const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
   // ✅ NEW: packing fee calculate
   const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
-  // ✅ NEW: total-ல packing fee add
-  const total = subtotal + deliveryFee + totalPackingFee;
+  // ✅ NEW: total-ல packing fee add (only for takeaway)
+  const total = orderType === "dinein"
+    ? subtotal
+    : subtotal + deliveryFee + totalPackingFee;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const getVendorId = async (stallName: string): Promise<string> => {
@@ -205,9 +212,10 @@ export default function PaymentPage() {
                   stallName: i.stallName,
                 })),
                 itemTotal: subtotal,
-                deliveryFee,
-                packingFee: totalPackingFee, // ✅ NEW: Firestore-லயும் save
+                deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
+                packingFee: orderType === "dinein" ? 0 : totalPackingFee, // ✅ NEW: Firestore-லயும் save
                 totalAmount: total,
+                orderType,
                 paymentMethod: "razorpay",
                 paymentStatus: "paid",
                 status: "placed",
@@ -364,12 +372,14 @@ export default function PaymentPage() {
             <span className="text-muted">Item Total</span>
             <span className="font-semibold text-foreground">₹{subtotal}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Delivery Fee (Zone {zone})</span>
-            <span className="font-semibold text-foreground">₹{deliveryFee}</span>
-          </div>
+          {orderType === "takeaway" && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Delivery Fee (Zone {zone})</span>
+              <span className="font-semibold text-foreground">₹{deliveryFee}</span>
+            </div>
+          )}
           {/* ✅ NEW: Packing Fee line */}
-          {totalPackingFee > 0 && (
+          {orderType === "takeaway" && totalPackingFee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted">📦 Packing Fee</span>
               <span className="font-semibold text-foreground">₹{totalPackingFee}</span>

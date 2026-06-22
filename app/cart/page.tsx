@@ -34,6 +34,7 @@ export default function CartPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponError, setCouponError] = useState("");
+  const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
 
   useEffect(() => {
     setMounted(true);
@@ -50,6 +51,10 @@ export default function CartPage() {
     } catch {
       setCart([]);
     }
+    const savedOrderType = localStorage.getItem("vayra_order_type");
+    if (savedOrderType === "dinein" || savedOrderType === "takeaway") {
+      setOrderType(savedOrderType);
+    }
     setIsLoaded(true);
   }, [mounted]);
 
@@ -61,6 +66,13 @@ export default function CartPage() {
       } catch { }
     }
   }, [cart, mounted, isLoaded]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem("vayra_order_type", orderType);
+    } catch { }
+  }, [orderType, mounted]);
 
   const updateQty = (id: string, delta: number) => {
     setCart((prev) => {
@@ -112,8 +124,10 @@ export default function CartPage() {
   const discountAmount = appliedCoupon
     ? Math.round((subtotal * couponDiscount) / 100)
     : 0;
-  // ✅ NEW: packingFee included in total
-  const total = subtotal + deliveryFee + totalPackingFee - discountAmount;
+  // ✅ NEW: packingFee included in total (only for takeaway)
+  const total = orderType === "dinein"
+    ? subtotal - discountAmount
+    : subtotal + deliveryFee + totalPackingFee - discountAmount;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   if (!mounted) {
@@ -310,6 +324,25 @@ export default function CartPage() {
           )}
         </div>
 
+        {/* Order Type Toggle */}
+        <div className="bg-card rounded-2xl border border-border p-4">
+          <h3 className="font-bold text-foreground mb-3">Order Type</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setOrderType("takeaway")}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "takeaway" ? "bg-primary text-white" : "bg-card border border-border text-muted"}`}
+            >
+              🥡 Takeaway
+            </button>
+            <button
+              onClick={() => setOrderType("dinein")}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "dinein" ? "bg-primary text-white" : "bg-card border border-border text-muted"}`}
+            >
+              🍽️ Dine-in
+            </button>
+          </div>
+        </div>
+
         {/* Bill Details */}
         <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
           <h3 className="font-bold text-foreground border-b border-border pb-2">
@@ -319,14 +352,16 @@ export default function CartPage() {
             <span className="text-muted">Item Total</span>
             <span className="font-semibold text-foreground">₹{subtotal}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">
-              Delivery Fee {zone ? `(Zone ${zone})` : ""}
-            </span>
-            <span className="font-semibold text-foreground">₹{deliveryFee}</span>
-          </div>
+          {orderType === "takeaway" && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">
+                Delivery Fee {zone ? `(Zone ${zone})` : ""}
+              </span>
+              <span className="font-semibold text-foreground">₹{deliveryFee}</span>
+            </div>
+          )}
           {/* ✅ NEW: Packing Fee line */}
-          {totalPackingFee > 0 && (
+          {orderType === "takeaway" && totalPackingFee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted">📦 Packing Fee</span>
               <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
