@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         // ✅ OTP correct - update order status
         const orderRef = adminDb.collection('orders').doc(orderId);
         await orderRef.update({
-            orderStatus: 'handed_over',
+            orderStatus: 'out_for_delivery',
             handoverAt: new Date(),
             handoverOtp: null,
         });
