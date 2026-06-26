@@ -72,20 +72,23 @@ function ConfirmedPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-      <div
-        className={`w-24 h-24 bg-[#00C853] rounded-full flex items-center justify-center mb-6 transition-all duration-700 transform shadow-2xl shadow-green-500/40 ${mounted ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
-      >
+    <div className="min-h-screen bg-background flex flex-col items-center p-6 pt-12 text-center pb-10">
+
+      {/* Success icon */}
+      <div className={`w-24 h-24 bg-[#00C853] rounded-full flex items-center justify-center mb-6 transition-all duration-700 transform shadow-2xl shadow-green-500/40 ${mounted ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}>
         <Check size={48} className="text-white" strokeWidth={3} />
       </div>
 
+      {/* Title */}
       <div className={`transition-all duration-700 delay-200 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="text-3xl font-black text-foreground mb-1">Order Confirmed! 🎉</h1>
         <p className="text-muted text-base">Your beach bites are on the way!</p>
       </div>
 
+      {/* Cards */}
       <div className={`w-full max-w-sm mt-8 space-y-4 transition-all duration-700 delay-300 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
 
+        {/* Order Summary */}
         {(orderId || amount > 0 || items.length > 0) && (
           <div className="bg-card border border-border rounded-3xl p-5 text-left shadow-lg">
             <h3 className="font-bold text-foreground text-sm flex items-center gap-2 mb-3 border-b border-border pb-2">
@@ -131,6 +134,7 @@ function ConfirmedPageContent() {
           </div>
         )}
 
+        {/* Need Help */}
         <div className="bg-primary/5 border border-primary/20 rounded-3xl p-5 text-left flex items-center justify-between shadow-sm">
           <div>
             <p className="text-xs text-primary font-bold uppercase tracking-wider mb-0.5">Need Help?</p>
@@ -142,6 +146,7 @@ function ConfirmedPageContent() {
           </a>
         </div>
 
+        {/* Estimated Delivery */}
         <div className="bg-card border border-border rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0">
             <Clock size={22} className="text-primary" />
@@ -152,6 +157,7 @@ function ConfirmedPageContent() {
           </div>
         </div>
 
+        {/* Delivery Location */}
         <div className="bg-card border border-border rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
           <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center flex-shrink-0">
             <MapPin size={22} className="text-orange-500" />
@@ -162,13 +168,16 @@ function ConfirmedPageContent() {
           </div>
         </div>
 
+        {/* Notice */}
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-3xl p-4 text-center">
           <p className="text-yellow-600 dark:text-yellow-400 text-xs font-semibold">
             📱 Our delivery partner will call you when they arrive nearby!
           </p>
         </div>
+
       </div>
 
+      {/* Back to Home button */}
       <div className={`w-full max-w-sm mt-8 transition-all duration-700 delay-500 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <button
           onClick={() => router.push("/home")}
@@ -178,6 +187,7 @@ function ConfirmedPageContent() {
           Back to Home
         </button>
       </div>
+
     </div>
   );
 }
