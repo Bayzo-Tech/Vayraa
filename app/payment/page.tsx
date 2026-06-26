@@ -33,7 +33,7 @@ type CartItem = {
   image: string;
   stallName: string;
   quantity: number;
-  packingFee?: number; // ✅ NEW
+  packingFee?: number;
 };
 
 export default function PaymentPage() {
@@ -120,12 +120,8 @@ export default function PaymentPage() {
   };
 
   const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
-  // ✅ NEW: packing fee calculate
   const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
-  // ✅ NEW: total-ல packing fee add (only for takeaway)
-  const total = orderType === "dinein"
-    ? subtotal
-    : subtotal + deliveryFee + totalPackingFee;
+  const total = orderType === "dinein" ? subtotal : subtotal + deliveryFee + totalPackingFee;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const getVendorId = async (stallName: string): Promise<string> => {
@@ -152,8 +148,7 @@ export default function PaymentPage() {
       const vendorName = cart.length > 0 ? cart[0].stallName : "Unknown Vendor";
       const itemsSummary = cart.map((i) => `${i.quantity}x ${i.name}`).join(", ");
       const vendorId = await getVendorId(vendorName);
-      const normalizedUserId =
-        user?.phoneNumber?.replace("+91", "91") || user?.uid || "guest";
+      const normalizedUserId = user?.phoneNumber?.replace("+91", "91") || user?.uid || "guest";
 
       let beachId = "";
       let zoneId = "";
@@ -175,8 +170,6 @@ export default function PaymentPage() {
         console.error("Error looking up beach/zone mapping:", err);
       }
 
-      // Generate a Firestore doc ref ahead of time so we have the orderId
-      // for the redirect URL, but do NOT write anything to Firestore yet.
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
 
@@ -190,7 +183,6 @@ export default function PaymentPage() {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
-          // ✅ Order is saved to Firestore ONLY after payment succeeds
           let saveSuccess = false;
           let lastError = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
@@ -213,7 +205,7 @@ export default function PaymentPage() {
                 })),
                 itemTotal: subtotal,
                 deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
-                packingFee: orderType === "dinein" ? 0 : totalPackingFee, // ✅ NEW: Firestore-லயும் save
+                packingFee: orderType === "dinein" ? 0 : totalPackingFee,
                 totalAmount: total,
                 orderType,
                 paymentMethod: "razorpay",
@@ -240,11 +232,7 @@ export default function PaymentPage() {
             console.error("All 3 Firestore save attempts failed:", lastError);
           }
 
-          try {
-            localStorage.removeItem("bayzo_cart");
-          } catch (e) {
-            console.error(e);
-          }
+          try { localStorage.removeItem("bayzo_cart"); } catch (e) { console.error(e); }
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}&paymentId=${response.razorpay_payment_id}&rzpOrderId=${response.razorpay_order_id}`;
         },
         prefill: {
@@ -252,10 +240,7 @@ export default function PaymentPage() {
         },
         theme: { color: "#FF6B00" },
         modal: {
-          ondismiss: function () {
-            // ✅ Payment cancelled/modal closed — no order was created, just reset state
-            setIsProcessing(false);
-          },
+          ondismiss: function () { setIsProcessing(false); },
         },
       };
 
@@ -263,7 +248,6 @@ export default function PaymentPage() {
         const rzp = new window.Razorpay(options);
         rzp.on("payment.failed", (response: Record<string, unknown>) => {
           const error = response.error as { code?: string; description?: string } | undefined;
-          // ✅ Payment failed — no order was created, just show failure UI
           setIsProcessing(false);
           setFailMessage(error?.description || "Payment failed. Please try again.");
           setShowFailPopup(true);
@@ -281,7 +265,9 @@ export default function PaymentPage() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col">
+
+      {/* Fail Popup */}
       {showFailPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="bg-card rounded-3xl p-6 w-full max-w-sm border border-border shadow-2xl">
@@ -315,7 +301,8 @@ export default function PaymentPage() {
         </div>
       )}
 
-      <div className="flex-shrink-0 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-border">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-border">
         <button
           onClick={() => router.back()}
           disabled={isProcessing}
@@ -326,7 +313,10 @@ export default function PaymentPage() {
         <h1 className="text-xl font-bold text-foreground">Checkout</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
+
+        {/* Location */}
         <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
             <MapPin size={20} className="text-primary" />
@@ -337,6 +327,7 @@ export default function PaymentPage() {
           </div>
         </div>
 
+        {/* Order Items */}
         <div className="bg-card rounded-2xl border border-border p-4">
           <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
             <ShoppingBag size={18} className="text-primary" />
@@ -366,6 +357,7 @@ export default function PaymentPage() {
           </div>
         </div>
 
+        {/* Bill Summary */}
         <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
           <h3 className="font-bold text-foreground border-b border-border pb-2">Bill Summary</h3>
           <div className="flex justify-between text-sm">
@@ -378,7 +370,6 @@ export default function PaymentPage() {
               <span className="font-semibold text-foreground">₹{deliveryFee}</span>
             </div>
           )}
-          {/* ✅ NEW: Packing Fee line */}
           {orderType === "takeaway" && totalPackingFee > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted">📦 Packing Fee</span>
@@ -390,10 +381,11 @@ export default function PaymentPage() {
             <span className="font-black text-foreground text-xl">₹{total}</span>
           </div>
         </div>
-        <div className="h-4" />
+
       </div>
 
-      <div className="flex-shrink-0 p-4 border-t border-border bg-background">
+      {/* Fixed bottom button */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-border bg-background">
         <button
           onClick={handlePayment}
           disabled={!razorpayLoaded || isProcessing || cart.length === 0}
@@ -404,6 +396,7 @@ export default function PaymentPage() {
         </button>
         <p className="text-center text-xs text-muted mt-3">🔒 Secured by Razorpay</p>
       </div>
+
     </div>
   );
 }
