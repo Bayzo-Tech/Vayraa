@@ -2,194 +2,171 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@/context/UserContext";
+import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { ArrowLeft, Copy, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, Package, ChevronRight } from "lucide-react";
+
+interface OrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
 
 interface Order {
   id: string;
-  items: { name: string; quantity: number }[];
-  totalAmount: number;
-  paymentId: string;
   orderStatus: string;
-  createdAt: { toDate: () => Date; toMillis?: () => number; seconds?: number } | null;
+  createdAt: { toDate: () => Date } | string | number | null;
+  razorpayPaymentId?: string;
+  vendorName?: string;
+  totalAmount: number;
+  items?: OrderItem[];
 }
 
-const statusColors: Record<string, string> = {
-  placed: "bg-[#FF6600]/20 text-[#FF6600]",
-  preparing: "bg-yellow-500/20 text-yellow-500",
-  "out for delivery": "bg-blue-500/20 text-blue-500",
-  delivered: "bg-green-500/20 text-green-500",
+const STATUS_COLOR: Record<string, string> = {
+  placed: "bg-orange-500/20 text-orange-400 border border-orange-500/30",
+  preparing: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+  ready_for_pickup: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
+  out_for_delivery: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+  delivered: "bg-green-500/20 text-green-400 border border-green-500/30",
+  cancelled: "bg-red-500/20 text-red-400 border border-red-500/30",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  placed: "Placed",
+  preparing: "Preparing",
+  ready_for_pickup: "Ready",
+  out_for_delivery: "Out for Delivery",
+  delivered: "Delivered ✅",
+  cancelled: "Cancelled ❌",
 };
 
 export default function HistoryPage() {
-  const { user } = useUser();
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!user && !loading) {
-        router.replace("/");
+    if (!mounted) return;
+    let uid = "";
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        uid = user.uid || "";
       }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [user, router, loading]);
+    } catch { }
 
-  useEffect(() => {
-    if (!user) return;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
 
-    const fetchOrders = async () => {
-      try {
-        // ✅ FIX: Both userId formats check பண்றோம்
-        const normalizedUid =
-          user.phoneNumber?.replace("+91", "91") || user.uid;
-
-        const idsToCheck = Array.from(
-          new Set([user.uid, normalizedUid])
-        );
-
-        let allOrders: Order[] = [];
-
-        for (const uid of idsToCheck) {
-          const q = query(
-            collection(db, "orders"),
-            where("userId", "==", uid)
-          );
-          const snapshot = await getDocs(q);
-          const fetched = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Order[];
-          allOrders = [...allOrders, ...fetched];
-        }
-
-        // Duplicate remove (same order id)
-        const seen = new Set();
-        allOrders = allOrders.filter((o) => {
-          if (seen.has(o.id)) return false;
-          seen.add(o.id);
-          return true;
-        });
-
-        // Sort by date in memory (bypasses Firestore index requirement)
-        allOrders.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
-          const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
-          return bTime - aTime;
-        });
-
-        setOrders(allOrders);
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [user]);
-
-  const copyToClipboard = (e: React.MouseEvent, text: string, id: string) => {
-    e.preventDefault();
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const formatDate = (timestamp: { toDate: () => Date } | null) => {
-    if (!timestamp) return "Just now";
-    const date = timestamp.toDate();
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "numeric",
-    }).format(date);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-muted">Loading orders...</p>
-      </div>
+    // ✅ Real-time onSnapshot — status changes reflect immediately
+    const q = query(
+      collection(db, "orders"),
+      where("customerId", "==", uid),
+      orderBy("createdAt", "desc")
     );
-  }
+
+    const unsub = onSnapshot(q, (snap) => {
+      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, [mounted]);
+
+  const formatDate = (ts: Order["createdAt"]) => {
+    if (!ts) return "";
+    const date = typeof ts === "object" && ts !== null && "toDate" in ts ? ts.toDate() : new Date(ts as string | number);
+    return date.toLocaleDateString("en-IN", {
+      day: "numeric", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+  };
+
+  if (!mounted || loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-10">
-      <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-border">
-        <button
-          onClick={() => router.push("/")}
-          className="p-2 bg-card rounded-full border border-border"
-        >
-          <ArrowLeft size={20} />
+    <div className="min-h-screen bg-background flex flex-col">
+
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-3 border-b border-border">
+        <button onClick={() => router.back()} className="p-2 bg-card rounded-full border border-border">
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl font-bold">Order History</h1>
+        <h1 className="text-lg font-bold text-foreground">Order History</h1>
       </div>
 
-      <div className="p-4 flex-1">
+      <div className="flex-1 p-4 space-y-3">
         {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-            <span className="text-6xl mb-4">🏖️</span>
-            <h2 className="text-xl font-semibold mb-2">No orders yet</h2>
-            <p className="text-muted">Looks like you haven&apos;t placed any orders.</p>
-            <Link
-              href="/home"
-              className="mt-6 bg-primary text-white px-6 py-3 rounded-full font-semibold active:scale-95 transition-transform"
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Package size={48} className="text-muted mb-4" />
+            <h2 className="text-lg font-bold text-foreground mb-1">No orders yet</h2>
+            <p className="text-muted text-sm mb-6">Your order history will appear here</p>
+            <button
+              onClick={() => router.push("/home")}
+              className="bg-primary text-white font-bold px-8 py-3 rounded-xl active:scale-95 transition-all"
             >
-              Start Exploring
-            </Link>
+              Order Now 🏖️
+            </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.map((order) => (
-              <Link
-                key={order.id}
-                href={`/orders/${order.id}`}
-                className="block bg-card border border-border rounded-2xl p-4 active:scale-[0.98] transition-transform"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <p className="text-xs text-muted mb-1">{formatDate(order.createdAt)}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {order.paymentId?.slice(0, 12)}...
-                      </span>
-                      <button
-                        onClick={(e) => copyToClipboard(e, order.paymentId, order.id)}
-                        className="text-primary hover:text-primary/80 transition-colors"
-                      >
-                        {copiedId === order.id ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColors[order.orderStatus] || statusColors.placed}`}>
-                    {order.orderStatus}
-                  </div>
+          orders.map(order => (
+            <div
+              key={order.id}
+              onClick={() => router.push(`/orders/${order.id}`)}
+              className="bg-card border border-border rounded-2xl p-4 cursor-pointer active:scale-[0.98] transition-all"
+            >
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-xs text-muted">{formatDate(order.createdAt)}</p>
+                  <p className="text-xs text-muted font-mono mt-0.5">{order.razorpayPaymentId?.slice(0, 15)}...</p>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${STATUS_COLOR[order.orderStatus] || STATUS_COLOR.placed}`}>
+                    {STATUS_LABEL[order.orderStatus] || order.orderStatus}
+                  </span>
+                  <ChevronRight size={16} className="text-muted" />
+                </div>
+              </div>
 
-                <div className="space-y-1 mb-4">
-                  {order.items?.map((item, i) => (
-                    <div key={i} className="text-sm">
-                      <span className="font-semibold">{item.quantity}x</span> {item.name}
-                    </div>
-                  ))}
-                </div>
+              {/* Items */}
+              <div className="space-y-1 mb-3">
+                {order.items?.slice(0, 2).map((item: OrderItem, idx: number) => (
+                  <p key={idx} className="text-sm text-foreground">
+                    <span className="text-primary font-bold">{item.quantity}x</span> {item.name}
+                  </p>
+                ))}
+                {(order.items?.length ?? 0) > 2 && (
+                  <p className="text-xs text-muted">+{(order.items?.length ?? 0) - 2} more items</p>
+                )}
+              </div>
 
-                <div className="border-t border-border pt-3 flex justify-between items-center">
-                  <span className="text-muted text-sm">Total Paid</span>
-                  <span className="text-lg font-black text-foreground">₹{order.totalAmount}</span>
+              <div className="flex justify-between items-center border-t border-border pt-3">
+                <div className="flex items-center gap-1 text-muted text-xs">
+                  <span>🏪</span>
+                  <span>{order.vendorName}</span>
                 </div>
-              </Link>
-            ))}
-          </div>
+                <p className="font-bold text-foreground">₹{order.totalAmount}</p>
+              </div>
+
+              {/* Active order indicator */}
+              {['placed', 'preparing', 'out_for_delivery', 'ready_for_pickup'].includes(order.orderStatus) && (
+                <div className="mt-3 flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse inline-block"></span>
+                  <p className="text-primary text-xs font-semibold">Tap to track your order →</p>
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
     </div>

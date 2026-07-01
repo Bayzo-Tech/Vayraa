@@ -1,88 +1,65 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { db } from "@/lib/firebase";
+import { useParams, useRouter } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ArrowLeft, Check, Copy, CheckCircle2, Phone } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { ArrowLeft, Package, MapPin, Phone, Copy, CheckCircle2, Clock } from "lucide-react";
 
-interface OrderItem {
-  name: string;
-  price: number;
-  quantity: number;
-  imageUrl?: string;
-}
-
-interface OrderData {
-  items: OrderItem[];
-  itemTotal: number;
-  deliveryFee: number;
-  totalAmount: number;
-  paymentId: string;
-  orderStatus: string;
-  deliveryPartnerPhone?: string;
-  customerPhone?: string;
-}
-
-const STEPS = [
-  { id: "placed", label: "Order Placed 🛒" },
-  { id: "preparing", label: "Preparing 👨‍🍳" },
-  { id: "out for delivery", label: "Out for Delivery 🏃" },
-  { id: "delivered", label: "Delivered ✅" },
+const STATUS_STEPS = [
+  { key: "placed", label: "Order Placed 🛒", desc: "Your order has been placed" },
+  { key: "preparing", label: "Preparing 👨‍🍳", desc: "Vendor is preparing your food" },
+  { key: "out_for_delivery", label: "Out for Delivery 🛵", desc: "Delivery partner is on the way" },
+  { key: "delivered", label: "Delivered ✅", desc: "Enjoy your meal!" },
 ];
 
-export default function OrderTrackingPage() {
-  const router = useRouter();
-  const params = useParams();
-  const orderId = params.orderId as string;
+const getStepIndex = (status: string) => {
+  const map: Record<string, number> = {
+    placed: 0,
+    preparing: 1,
+    ready_for_pickup: 1,
+    out_for_delivery: 2,
+    delivered: 3,
+    cancelled: -1,
+  };
+  return map[status] ?? 0;
+};
 
-  const [order, setOrder] = useState<OrderData | null>(null);
+export default function OrderTrackingPage() {
+  const params = useParams();
+  const router = useRouter();
+  const orderId = params?.orderId as string;
+
+  const [order, setOrder] = useState<Record<string, unknown> & { id?: string; orderStatus?: string; cancelledBy?: string; deliveryPartnerName?: string; deliveryPartnerPhone?: string; razorpayPaymentId?: string; itemTotal?: number; totalAmount?: number; deliveryFee?: number; packingFee?: number; location?: { area: string; zone: string }; items?: Array<{ name: string; quantity: number; price: number }> } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copiedId, setCopiedId] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(["", "", "", ""]);
+  const [copied, setCopied] = useState(false);
+  const [otp, setOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpSuccess, setOtpSuccess] = useState(false);
 
+  // ✅ Real-time onSnapshot
   useEffect(() => {
     if (!orderId) return;
-    const unsubscribe = onSnapshot(doc(db, "orders", orderId), (docSnap) => {
-      if (docSnap.exists()) {
-        setOrder(docSnap.data() as OrderData);
+    const unsub = onSnapshot(doc(db, "orders", orderId), (snap) => {
+      if (snap.exists()) {
+        setOrder({ id: snap.id, ...snap.data() });
       }
       setLoading(false);
     });
-    return () => unsubscribe();
+    return () => unsub();
   }, [orderId]);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(true);
-    setTimeout(() => setCopiedId(false), 2000);
+  const copyPaymentId = () => {
+    if (!order?.razorpayPaymentId) return;
+    navigator.clipboard.writeText(order.razorpayPaymentId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newOtp = [...otpDigits];
-    newOtp[index] = value.slice(-1);
-    setOtpDigits(newOtp);
-    if (value && index < 3) {
-      document.getElementById(`dotp-${index + 1}`)?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
-      document.getElementById(`dotp-${index - 1}`)?.focus();
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    const otp = otpDigits.join("");
-    if (otp.length !== 4) {
-      setOtpError("Please enter the 4-digit OTP");
-      return;
-    }
+  // ✅ OTP verify — customer enters OTP from delivery boy
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) { setOtpError("Enter 6-digit OTP"); return; }
     setOtpLoading(true);
     setOtpError("");
     try {
@@ -94,141 +71,136 @@ export default function OrderTrackingPage() {
       const data = await res.json();
       if (data.success) {
         setOtpSuccess(true);
+        setOtp("");
       } else {
-        setOtpError(data.message || "Invalid OTP");
+        setOtpError(data.message || "Invalid OTP. Try again.");
       }
     } catch {
-      setOtpError("Something went wrong. Try again.");
+      setOtpError("Network error. Try again.");
     } finally {
       setOtpLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-muted">Loading order details...</p>
-      </div>
-    );
-  }
-
-  if (!order) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center">
-        <h2 className="text-xl font-bold mb-2">Order Not Found</h2>
-        <button onClick={() => router.push("/history")} className="text-primary mt-4">
-          Return to History
-        </button>
-      </div>
-    );
-  }
-
-  const currentStepIndex = STEPS.findIndex(
-    (s) => s.id === order.orderStatus?.toLowerCase()
+  if (loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
   );
+
+  if (!order) return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+      <Package size={48} className="text-muted mb-4" />
+      <h2 className="text-xl font-bold text-foreground mb-2">Order not found</h2>
+      <button onClick={() => router.push("/home")} className="mt-4 bg-primary text-white px-6 py-3 rounded-xl font-bold">
+        Go Home
+      </button>
+    </div>
+  );
+
+  const currentStep = getStepIndex(order.orderStatus ?? "");
+  const isCancelled = order.orderStatus === "cancelled";
+  const isDelivered = order.orderStatus === "delivered";
+  const isOutForDelivery = order.orderStatus === "out_for_delivery";
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-10">
+
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-border">
-        <button
-          onClick={() => router.push("/history")}
-          className="p-2 bg-card rounded-full border border-border"
-        >
-          <ArrowLeft size={20} />
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-3 border-b border-border">
+        <button onClick={() => router.back()} className="p-2 bg-card rounded-full border border-border">
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl font-bold">Track Order</h1>
+        <div>
+          <h1 className="text-lg font-bold text-foreground">Track Order</h1>
+          <p className="text-xs text-muted">#{orderId.slice(0, 8).toUpperCase()}</p>
+        </div>
       </div>
 
-      <div className="p-4 flex-1 max-w-md mx-auto w-full space-y-4">
+      <div className="p-4 space-y-4">
 
-        {/* Stepper */}
-        <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold mb-6">Order Status</h2>
-          <div className="relative pl-6 space-y-8">
-            <div className="absolute left-9 top-2 bottom-2 w-0.5 bg-border"></div>
-            <div
-              className="absolute left-9 top-2 w-0.5 bg-primary transition-all duration-500"
-              style={{
-                height: `${Math.max(0, (currentStepIndex / (STEPS.length - 1)) * 100)}%`,
-              }}
-            ></div>
-            {STEPS.map((step, index) => {
-              const isCompleted =
-                index < currentStepIndex ||
-                (index === STEPS.length - 1 && currentStepIndex === index);
-              const isCurrent =
-                index === currentStepIndex && index !== STEPS.length - 1;
-              const isPending = index > currentStepIndex;
-              return (
-                <div key={step.id} className="relative z-10 flex items-center gap-4">
-                  <div
-                    className={[
-                      "w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-300",
-                      isCompleted ? "bg-primary border-primary text-white" : "",
-                      isCurrent ? "bg-primary border-primary text-white animate-pulse" : "",
-                      isPending ? "bg-background border-border text-transparent" : "",
-                    ].join(" ")}
-                  >
-                    {(isCompleted || isCurrent) && (
-                      <Check size={14} strokeWidth={3} />
-                    )}
+        {/* Status Timeline */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="font-bold text-foreground mb-4">Order Status</h2>
+
+          {isCancelled ? (
+            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+              <span className="text-2xl">❌</span>
+              <div>
+                <p className="text-red-500 font-bold">Order Cancelled</p>
+                {order.cancelledBy && (
+                  <p className="text-red-400 text-xs mt-0.5">
+                    Cancelled by: {order.cancelledBy === 'vendor' ? '🏪 Vendor' : order.cancelledBy === 'delivery' ? '🛵 Delivery Partner' : '👤 Customer'}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {STATUS_STEPS.map((step, idx) => {
+                const isDone = idx <= currentStep;
+                const isActive = idx === currentStep;
+                const isLast = idx === STATUS_STEPS.length - 1;
+                return (
+                  <div key={step.key} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all flex-shrink-0 ${isActive ? 'border-primary bg-primary/20 scale-110' : isDone ? 'border-green-500 bg-green-500/20' : 'border-border bg-card'}`}>
+                        {isDone && !isActive ? (
+                          <CheckCircle2 size={16} className="text-green-500" />
+                        ) : isActive ? (
+                          <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
+                        ) : (
+                          <div className="w-2 h-2 rounded-full bg-muted" />
+                        )}
+                      </div>
+                      {!isLast && (
+                        <div className={`w-0.5 h-8 mt-1 rounded-full ${idx < currentStep ? 'bg-green-500' : 'bg-border'}`} />
+                      )}
+                    </div>
+                    <div className={`pb-6 flex-1 ${isLast ? 'pb-0' : ''}`}>
+                      <p className={`font-semibold text-sm ${isActive ? 'text-primary' : isDone ? 'text-foreground' : 'text-muted'}`}>
+                        {step.label}
+                      </p>
+                      <p className={`text-xs mt-0.5 ${isActive ? 'text-muted' : isDone ? 'text-muted' : 'text-muted/50'}`}>
+                        {step.desc}
+                      </p>
+                    </div>
                   </div>
-                  <span
-                    className={[
-                      "font-medium text-sm",
-                      isPending ? "text-muted" : "text-foreground",
-                    ].join(" ")}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Delivery OTP Box */}
-        {order.orderStatus?.toLowerCase() === "out for delivery" && !otpSuccess && (
-          <div className="bg-card border-2 border-primary/30 rounded-3xl p-6 shadow-sm">
-            <div className="text-center mb-4">
-              <span className="text-2xl">🔐</span>
-              <h2 className="text-base font-bold text-foreground mt-1">Delivery OTP</h2>
-              <p className="text-xs text-muted mt-1">
-                Enter the OTP sent to your phone to confirm delivery
-              </p>
+        {/* ✅ OTP Box — shows when delivery boy sends OTP to customer */}
+        {isOutForDelivery && !isDelivered && !otpSuccess && (
+          <div className="bg-card border-2 border-primary/50 rounded-2xl p-5 shadow-[0_0_20px_rgba(255,102,0,0.1)]">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🔐</span>
+              <div>
+                <p className="font-bold text-foreground text-sm">Enter Delivery OTP</p>
+                <p className="text-muted text-xs">Your delivery partner will share the OTP</p>
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-3 mb-4">
-              {otpDigits.map((digit, i) => (
-                <input
-                  key={i}
-                  id={`dotp-${i}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  className={[
-                    "w-full aspect-square text-center text-xl font-bold rounded-xl border-2 bg-background text-foreground focus:outline-none transition-all",
-                    digit ? "border-primary" : "border-border",
-                  ].join(" ")}
-                />
-              ))}
-            </div>
-            {otpError && (
-              <p className="text-red-500 text-xs text-center mb-3">{otpError}</p>
-            )}
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full bg-background border border-border focus:border-primary rounded-xl px-4 py-3 text-foreground text-center text-2xl tracking-[0.5em] font-mono outline-none transition-colors mb-3"
+              placeholder="— — — — — —"
+              value={otp}
+              onChange={e => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+              maxLength={6}
+            />
+            {otpError && <p className="text-red-500 text-xs text-center mb-2">{otpError}</p>}
             <button
-              onClick={handleVerifyOtp}
-              disabled={otpLoading || otpDigits.join("").length !== 4}
-              className="w-full bg-primary text-white font-bold py-3 rounded-2xl disabled:opacity-50 transition-all active:scale-95"
+              onClick={handleVerifyOTP}
+              disabled={otp.length !== 6 || otpLoading}
+              className="w-full bg-primary disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-all"
             >
               {otpLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
               ) : (
-                "Confirm Delivery ✓"
+                "✅ Verify & Confirm Delivery"
               )}
             </button>
           </div>
@@ -236,80 +208,123 @@ export default function OrderTrackingPage() {
 
         {/* OTP Success */}
         {otpSuccess && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-3xl p-4 text-center">
-            <CheckCircle2 size={32} className="text-green-500 mx-auto mb-2" />
-            <p className="font-bold text-green-500">Delivery Confirmed!</p>
-            <p className="text-xs text-muted mt-1">Your order has been delivered successfully</p>
+          <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-5 text-center">
+            <p className="text-3xl mb-2">🎉</p>
+            <p className="text-green-500 font-bold">Order Delivered!</p>
+            <p className="text-muted text-xs mt-1">Thank you for ordering with Vayra!</p>
           </div>
         )}
 
-        {/* Delivery Partner Phone */}
-        {order.deliveryPartnerPhone && order.orderStatus?.toLowerCase() !== "delivered" && (
-          <div className="bg-card border border-border rounded-3xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-              <Phone size={18} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-muted">Delivery Partner</p>
-              <p className="font-bold text-foreground">{order.deliveryPartnerPhone}</p>
-            </div>
+        {/* Delivered success */}
+        {isDelivered && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-5 text-center">
+            <p className="text-3xl mb-2">🎉</p>
+            <p className="text-green-500 font-bold text-lg">Order Delivered!</p>
+            <p className="text-muted text-xs mt-1">Enjoy your beach food!</p>
+          </div>
+        )}
 
-            <a
-              href={`tel:${order.deliveryPartnerPhone}`}
-              className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-xl"
-            >
-              Call
-            </a>
+        {/* Delivery Partner Info */}
+        {order.deliveryPartnerName && (
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <p className="text-xs text-muted uppercase tracking-wider mb-2">🛵 Delivery Partner</p>
+            <p className="text-foreground font-bold">{order.deliveryPartnerName}</p>
+            {order.deliveryPartnerPhone && (
+              <a href={`tel:${order.deliveryPartnerPhone}`} className="text-primary text-sm flex items-center gap-1 mt-1">
+                <Phone size={13} /> {order.deliveryPartnerPhone}
+              </a>
+            )}
           </div>
         )}
 
         {/* Order Details */}
-        <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold mb-4 border-b border-border pb-2">Order Details</h2>
-          <div className="space-y-3 mb-6">
-            {order.items.map((item, i) => (
-              <div key={i} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold px-2 py-0.5 bg-primary/10 text-primary rounded-md">
-                    {item.quantity}x
-                  </span>
-                  <span>{item.name}</span>
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="font-bold text-foreground mb-4 flex items-center gap-2">
+            <Package size={16} className="text-primary" /> Order Details
+          </h2>
+          <div className="space-y-2 mb-4">
+            {order.items?.map((item: { name: string; quantity: number; price: number }, idx: number) => (
+              <div key={idx} className="flex justify-between items-center py-1.5 border-b border-border last:border-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-primary text-xs font-bold bg-primary/10 px-1.5 py-0.5 rounded">{item.quantity}x</span>
+                  <span className="text-foreground text-sm">{item.name}</span>
                 </div>
-                <span className="font-semibold">₹{item.price * item.quantity}</span>
+                <span className="text-foreground text-sm font-semibold">₹{item.price * item.quantity}</span>
               </div>
             ))}
           </div>
-          <div className="space-y-2 border-t border-border pt-4 text-sm text-muted">
-            <div className="flex justify-between">
-              <span>Item Total</span>
-              <span className="text-foreground">₹{order.itemTotal}</span>
+          <div className="space-y-2 border-t border-border pt-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Item Total</span>
+              <span className="text-foreground">₹{order.itemTotal || order.totalAmount}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Delivery Fee</span>
-              <span className="text-foreground">₹{order.deliveryFee}</span>
-            </div>
-            <div className="flex justify-between font-bold text-foreground text-lg pt-2 mt-2 border-t border-dashed border-border">
-              <span>Total Amount</span>
-              <span>₹{order.totalAmount}</span>
-            </div>
-          </div>
-          <div className="mt-6 pt-4 border-t border-border flex flex-col gap-1">
-            <span className="text-xs text-muted uppercase tracking-wider">Payment ID</span>
-            <div className="flex items-center justify-between bg-background p-3 rounded-xl border border-border">
-              <span className="text-xs font-mono text-muted-foreground truncate mr-2">
-                {order.paymentId}
-              </span>
-              <button
-                onClick={() => copyToClipboard(order.paymentId)}
-                className="text-primary hover:bg-primary/10 p-1.5 rounded-md transition-colors flex-shrink-0"
-              >
-                {copiedId ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-              </button>
+            {(order.deliveryFee ?? 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Delivery Fee</span>
+                <span className="text-foreground">₹{order.deliveryFee}</span>
+              </div>
+            )}
+            {(order.packingFee ?? 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Packing Fee</span>
+                <span className="text-foreground">₹{order.packingFee}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
+              <span className="text-foreground">Total Amount</span>
+              <span className="text-foreground">₹{order.totalAmount}</span>
             </div>
           </div>
         </div>
 
+        {/* Location */}
+        {order.location && (
+          <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+              <MapPin size={18} className="text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted">Delivery Location</p>
+              <p className="text-foreground font-semibold text-sm">{order.location.area} — {order.location.zone}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Payment ID */}
+        {order.razorpayPaymentId && (
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <p className="text-xs text-muted uppercase tracking-wider mb-2">Payment ID</p>
+            <div className="flex items-center justify-between bg-background border border-border rounded-xl px-3 py-2.5">
+              <span className="font-mono text-xs text-foreground">{order.razorpayPaymentId}</span>
+              <button onClick={copyPaymentId} className="text-primary ml-2 flex-shrink-0">
+                {copied ? <CheckCircle2 size={16} className="text-green-500" /> : <Copy size={16} />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Estimated time */}
+        {!isDelivered && !isCancelled && (
+          <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/10 rounded-full flex items-center justify-center flex-shrink-0">
+              <Clock size={18} className="text-orange-500" />
+            </div>
+            <div>
+              <p className="text-xs text-muted">Estimated Delivery</p>
+              <p className="text-foreground font-bold">20–30 mins</p>
+            </div>
+          </div>
+        )}
+
+        {/* Back to Home */}
+        <button
+          onClick={() => router.push("/home")}
+          className="w-full bg-primary text-white font-bold py-4 rounded-2xl active:scale-95 transition-all"
+        >
+          🏠 Back to Home
+        </button>
+
       </div>
-    </div >
+    </div>
   );
 }
