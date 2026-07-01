@@ -40,7 +40,9 @@ export async function POST(request: Request) {
             orderId,
         });
 
-        // ✅ Template #2 (214467) - Delivery to Customer
+        // ✅ FIXED: 2 variables — customerName|otp
+        const customerName = orderData.customerName || 'Customer';
+
         const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
             method: 'POST',
             headers: {
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
                 route: 'dlt',
                 sender_id: 'VAYRAA',
                 message: '214467',
-                variables_values: otp,
+                variables_values: `${customerName}|${otp}`,
                 flash: 0,
                 numbers: customerPhone,
             }),
