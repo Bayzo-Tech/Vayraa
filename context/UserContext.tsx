@@ -13,6 +13,7 @@ interface UserContextType {
   role: string | null;
   deliveryFee: number;
   setDeliveryFee: (fee: number) => void;
+  authLoading: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -45,6 +46,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [zone, setZone] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [deliveryFee, setDeliveryFee] = useState<number>(10);
+  const [authLoading, setAuthLoading] = useState<boolean>(true); // NEW
 
   useEffect(() => {
     setMounted(true);
@@ -91,6 +93,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           setUser(currentUser);
           setRole("user");
         }
+        setAuthLoading(false); // NEW
       } else {
         logoutTimer = setTimeout(() => {
           if (isFirstAuthCheck.current) {
@@ -104,6 +107,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
             setRole(null);
           }
+          setAuthLoading(false); // NEW
         }, 3000);
       }
     });
@@ -153,7 +157,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ✅ FIX: any[] → ZoneType interface use பண்றோம்
   const handleSetZoneWithFee = async (newZone: number | null, beachArea?: string) => {
     setZone(newZone);
     if (mounted) {
@@ -204,6 +207,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       zone, setZone: handleSetZoneWithFee,
       role,
       deliveryFee, setDeliveryFee,
+      authLoading,
     }}>
       {children}
     </UserContext.Provider>

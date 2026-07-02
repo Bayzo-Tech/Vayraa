@@ -38,7 +38,7 @@ type CartItem = {
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { user, area, zone, deliveryFee } = useUser();
+  const { user, area, zone, deliveryFee, authLoading } = useUser();
   const [mounted, setMounted] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -138,7 +138,7 @@ export default function PaymentPage() {
   const handlePayment = async () => {
     if (!razorpayLoaded || isProcessing) return;
     if (!user) {
-      setFailMessage("Session loading, please wait a moment and try again.");
+      setFailMessage("You're not logged in. Please login and try again.");
       setShowFailPopup(true);
       return;
     }
@@ -388,11 +388,13 @@ export default function PaymentPage() {
       <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-border bg-background">
         <button
           onClick={handlePayment}
-          disabled={!razorpayLoaded || isProcessing || cart.length === 0}
+          disabled={!razorpayLoaded || isProcessing || cart.length === 0 || authLoading}
           className="w-full bg-[#00C853] text-white font-bold py-4 rounded-2xl flex items-center justify-between px-6 shadow-lg active:scale-95 transition-all disabled:opacity-70"
         >
           <span className="text-base font-bold">₹{total}</span>
-          <span className="text-lg font-bold">{isProcessing ? "Processing..." : "Pay Now →"}</span>
+          <span className="text-lg font-bold">
+            {isProcessing ? "Processing..." : authLoading ? "Loading..." : "Pay Now →"}
+          </span>
         </button>
         <p className="text-center text-xs text-muted mt-3">🔒 Secured by Razorpay</p>
       </div>
