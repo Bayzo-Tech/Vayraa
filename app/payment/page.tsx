@@ -136,8 +136,12 @@ export default function PaymentPage() {
   };
 
   const handlePayment = async () => {
+    // TEMP DEBUG
+    console.log("[Payment] handlePayment clicked. user:", user, "typeof user:", typeof user, "user is null?", user === null, "authLoading:", authLoading, "razorpayLoaded:", razorpayLoaded, "isProcessing:", isProcessing, "at:", new Date().toISOString());
     if (!razorpayLoaded || isProcessing) return;
     if (!user) {
+      // TEMP DEBUG
+      console.log("[Payment] Blocked: user is falsy at click time ->", user);
       setFailMessage("You're not logged in. Please login and try again.");
       setShowFailPopup(true);
       return;

@@ -64,15 +64,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     let logoutTimer: ReturnType<typeof setTimeout> | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // TEMP DEBUG
+      console.log("[UserContext] onAuthStateChanged fired. currentUser:", currentUser, "uid:", currentUser?.uid, "at:", new Date().toISOString());
       if (currentUser) {
         if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; }
         isFirstAuthCheck.current = false;
         try {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          // TEMP DEBUG
+          console.log("[UserContext] getDoc(users/" + currentUser.uid + ") exists:", userDoc.exists());
           if (userDoc.exists()) {
             setUser(currentUser);
             setRole(userDoc.data().role || "user");
+            // TEMP DEBUG
+            console.log("[UserContext] setUser called with currentUser, role:", userDoc.data().role || "user");
           } else {
+            // TEMP DEBUG
+            console.log("[UserContext] userDoc did NOT exist for uid:", currentUser.uid, "-> forcing signOut + redirect to /login");
             await signOut(auth);
             document.cookie = "bayzo_session=; path=/; max-age=0";
             safeLocalStorage.remove("bayzo_token");
@@ -89,13 +97,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             window.location.href = "/login";
           }
         } catch (error) {
+          // TEMP DEBUG
+          console.log("[UserContext] getDoc threw an error, falling back to setUser(currentUser):", error);
           console.error("Error fetching user:", error);
           setUser(currentUser);
           setRole("user");
         }
         setAuthLoading(false); // NEW
+        // TEMP DEBUG
+        console.log("[UserContext] authLoading set to false (currentUser branch)");
       } else {
+        // TEMP DEBUG
+        console.log("[UserContext] currentUser is null. isFirstAuthCheck:", isFirstAuthCheck.current, "-> scheduling 3s logoutTimer");
         logoutTimer = setTimeout(() => {
+          // TEMP DEBUG
+          console.log("[UserContext] logoutTimer FIRED (3s elapsed with no sign-in). isFirstAuthCheck was:", isFirstAuthCheck.current);
           if (isFirstAuthCheck.current) {
             isFirstAuthCheck.current = false;
             setUser(null);
@@ -108,6 +124,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setRole(null);
           }
           setAuthLoading(false); // NEW
+          // TEMP DEBUG
+          console.log("[UserContext] authLoading set to false (logoutTimer branch)");
         }, 3000);
       }
     });
