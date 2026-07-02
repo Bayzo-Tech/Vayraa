@@ -2,51 +2,27 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signInWithCustomToken } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { ArrowLeft } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 function LoginPageContent() {
-  const [mounted, setMounted] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/home";
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<1 | 2>(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
 
-  // ✅ Problem 5 Fix: Already logged in? Redirect to home
-  useEffect(() => {
-    setMounted(true);
-    const hasSession = typeof document !== "undefined" && document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
-    if (hasSession) {
-      router.replace(redirect);
-      return;
-    }
+  useEffect(() => { setMounted(true); }, []);
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        router.replace(redirect);
-      } else {
-        setCheckingAuth(false);
-      }
-    });
-    return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  const redirectTo = searchParams.get("redirect") || "/home";
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-    if (phone.length !== 10) {
-      setError("Please enter a valid 10-digit phone number.");
-      return;
-    }
-    setError("");
+  const handleSendOTP = async () => {
+    if (phone.length !== 10) { setError("Enter valid 10-digit number"); return; }
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/send-otp", {
         method: "POST",
@@ -54,201 +30,158 @@ function LoginPageContent() {
         body: JSON.stringify({ phone }),
       });
       const data = await res.json();
-      if (data.success) {
-        setStep(2);
-      } else {
-        setError(data.message || "Failed to send OTP. Please try again.");
-      }
-    } catch {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+      if (data.success) { setStep(2); }
+      else setError(data.message || "Failed to send OTP");
+    } catch { setError("Network error. Try again."); }
+    finally { setLoading(false); }
   };
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newOtp = [...otp];
-    newOtp[index] = value.slice(-1);
-    setOtp(newOtp);
-    if (value && index < 5) {
-      const next = document.getElementById(`otp-${index + 1}`);
-      next?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      const prev = document.getElementById(`otp-${index - 1}`);
-      prev?.focus();
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-    const otpString = otp.join("");
-    if (otpString.length !== 6) {
-      setError("Please enter the complete 6-digit OTP.");
-      return;
-    }
-    setError("");
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) { setError("Enter 6-digit OTP"); return; }
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, otp: otpString }),
+        body: JSON.stringify({ phone, otp }),
       });
       const data = await res.json();
       if (data.success) {
-        // ✅ Firebase sign in
-        await signInWithCustomToken(auth, data.token);
-
-        // ✅ Set session cookie so middleware knows user is logged in
-        document.cookie = `bayzo_session=${data.token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
-
-        if (mounted && typeof window !== "undefined") {
-          try {
-            localStorage.setItem("bayzo_token", data.token);
-            localStorage.setItem("user", JSON.stringify({ uid: data.uid, phone }));
-          } catch (e) {
-            console.error(e);
+        // Save user to localStorage
+        const uid = `91${phone}`;
+        let profileComplete = false;
+        try {
+          const userSnap = await getDoc(doc(db, "users", uid));
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            profileComplete = !!(userData.name && userData.name.trim());
+            localStorage.setItem("user", JSON.stringify({
+              uid,
+              phoneNumber: `+91${phone}`,
+              name: userData.name || "",
+              profileComplete,
+            }));
+          } else {
+            localStorage.setItem("user", JSON.stringify({
+              uid,
+              phoneNumber: `+91${phone}`,
+              name: "",
+              profileComplete: false,
+            }));
           }
+        } catch {
+          localStorage.setItem("user", JSON.stringify({
+            uid,
+            phoneNumber: `+91${phone}`,
+            name: "",
+            profileComplete: false,
+          }));
         }
 
-        const currentRedirect = searchParams.get("redirect") || "/home";
-        if (data.profileComplete) {
-          router.replace(currentRedirect);
+        // Set session cookie
+        document.cookie = `bayzo_session=${uid}; path=/; max-age=2592000`;
+
+        // ✅ Redirect logic
+        if (profileComplete) {
+          router.replace(redirectTo);
         } else {
-          const nextUrl =
-            currentRedirect !== "/home"
-              ? `/basic-details?redirect=${encodeURIComponent(currentRedirect)}`
-              : "/basic-details";
-          router.replace(nextUrl);
+          router.replace(`/basic-details?redirect=${encodeURIComponent(redirectTo)}`);
         }
       } else {
-        setError(data.message || "Invalid OTP. Please try again.");
+        setError(data.message || "Invalid OTP");
       }
-    } catch {
-      setError("An error occurred during verification. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError("Network error. Try again."); }
+    finally { setLoading(false); }
   };
 
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (!mounted) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col p-6">
-      <button
-        onClick={() => (step === 2 ? setStep(1) : router.back())}
-        className="mt-4 mb-8 w-fit focus:outline-none"
-      >
-        <ArrowLeft size={24} className="text-foreground" />
-      </button>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm">
 
-      <div className="flex-1">
-        <h1 className="text-3xl font-bold mb-2 text-foreground">Welcome Back</h1>
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-foreground">
+            VAY<span className="text-primary">RA</span>
+          </h1>
+          <p className="text-muted text-sm mt-2">Beach Food Delivery</p>
+        </div>
 
-        {step === 1 ? (
-          <p className="text-muted mb-10">Enter your phone number to login or register</p>
-        ) : (
-          <p className="text-muted mb-10">Enter the 6-digit OTP sent to your phone</p>
-        )}
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-xl mb-6 text-sm text-center">
-            {error}
-          </div>
-        )}
-
-        {step === 1 ? (
-          <form onSubmit={handleSendOtp} className="space-y-6">
-            <div className="flex items-center bg-card border-2 border-border rounded-2xl h-16 px-4 focus-within:border-primary transition-all">
-              <span className="text-2xl mr-2">🇮🇳</span>
-              <span className="text-muted font-bold text-sm mr-2">IN</span>
-              <span className="text-foreground font-semibold text-lg mr-3">+91</span>
-              <div className="w-px h-8 bg-border mr-3" />
-              <input
-                type="tel"
-                maxLength={10}
-                className="flex-1 bg-transparent text-foreground text-lg focus:outline-none placeholder:text-muted"
-                placeholder="Enter number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || phone.length !== 10}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-              ) : (
-                "Send OTP"
-              )}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-8">
-            <p className="text-sm text-muted -mt-4">
-              OTP sent to{" "}
-              <span className="text-foreground font-semibold">+91 {phone}</span>
-            </p>
-
-            <div className="grid grid-cols-6 gap-2 w-full">
-              {otp.map((digit, i) => (
+        <div className="bg-card border border-border rounded-3xl p-6 shadow-lg">
+          {step === 1 ? (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-bold text-foreground mb-1">Enter your number</h2>
+                <p className="text-muted text-sm">We'll send you a verification code</p>
+              </div>
+              <div className="flex items-center bg-background border border-border rounded-xl overflow-hidden focus-within:border-primary transition-colors">
+                <span className="px-3 py-3 text-muted text-sm border-r border-border">+91</span>
                 <input
-                  key={i}
-                  id={`otp-${i}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  className={`w-full aspect-square text-center text-xl font-bold rounded-lg border-2 bg-card text-foreground focus:outline-none transition-all ${digit ? "border-primary" : "border-border"
-                    } focus:border-primary`}
+                  type="tel"
+                  value={phone}
+                  onChange={e => { setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }}
+                  placeholder="Mobile Number"
+                  className="flex-1 bg-transparent px-3 py-3 text-foreground text-sm outline-none placeholder:text-muted"
+                  maxLength={10}
                 />
-              ))}
+              </div>
+              {error && <p className="text-red-500 text-xs">{error}</p>}
+              <button
+                onClick={handleSendOTP}
+                disabled={loading || phone.length !== 10}
+                className="w-full bg-primary disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm active:scale-95 transition-all"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
+                ) : "Send OTP →"}
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStep(1);
-                setOtp(["", "", "", "", "", ""]);
-                setError("");
-              }}
-              className="text-sm text-primary font-medium"
-            >
-              Resend OTP
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading || otp.join("").length !== 6}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-              ) : (
-                "Verify OTP"
-              )}
-            </button>
-          </form>
-        )}
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <button
+                  onClick={() => { setStep(1); setOtp(""); setError(""); }}
+                  className="text-muted text-sm mb-3 flex items-center gap-1"
+                >
+                  ← Change number
+                </button>
+                <h2 className="text-xl font-bold text-foreground mb-1">Enter OTP</h2>
+                <p className="text-muted text-sm">Sent to +91 {phone}</p>
+              </div>
+              <input
+                type="text"
+                value={otp}
+                onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                placeholder="— — — — — —"
+                className="w-full bg-background border border-border focus:border-primary rounded-xl px-4 py-3 text-foreground text-center text-2xl tracking-[0.5em] font-mono outline-none transition-colors"
+                maxLength={6}
+                autoFocus
+              />
+              {error && <p className="text-red-500 text-xs">{error}</p>}
+              <button
+                onClick={handleVerifyOTP}
+                disabled={loading || otp.length !== 6}
+                className="w-full bg-primary disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm active:scale-95 transition-all"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
+                ) : "Verify OTP ✓"}
+              </button>
+              <button
+                onClick={handleSendOTP}
+                className="w-full text-primary text-sm font-medium py-2"
+              >
+                Resend OTP
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -258,7 +191,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     }>
       <LoginPageContent />
