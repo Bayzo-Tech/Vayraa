@@ -118,7 +118,7 @@ function LoginPageContent() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-xl font-bold text-foreground mb-1">Enter your number</h2>
-                <p className="text-muted text-sm">We'll send you a verification code</p>
+                <p className="text-muted text-sm">We&apos;ll send you a verification code</p>
               </div>
               <div className="flex items-center bg-background border border-border rounded-xl overflow-hidden focus-within:border-primary transition-colors">
                 <span className="px-3 py-3 text-muted text-sm border-r border-border">+91</span>
