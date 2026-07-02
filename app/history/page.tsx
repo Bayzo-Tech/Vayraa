@@ -14,12 +14,13 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  createdAt: { toDate?: () => Date } | string | number | null;
   orderStatus: string;
-  createdAt: { toDate: () => Date } | string | number | null;
   razorpayPaymentId?: string;
-  vendorName?: string;
-  totalAmount: number;
   items?: OrderItem[];
+  vendorName?: string;
+  totalAmount?: number;
+  customerId?: string;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -45,43 +46,74 @@ export default function HistoryPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [uid, setUid] = useState<string>("");
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!mounted) return;
-    let uid = "";
     try {
       const userStr = localStorage.getItem("user");
       if (userStr) {
         const user = JSON.parse(userStr);
-        uid = user.uid || "";
+        const userId = user.uid || user.phoneNumber?.replace("+", "") || "";
+        setUid(userId);
+      } else {
+        setLoading(false);
       }
-    } catch { }
-
-    if (!uid) {
+    } catch {
       setLoading(false);
-      return;
     }
-
-    // ✅ Real-time onSnapshot — status changes reflect immediately
-    const q = query(
-      collection(db, "orders"),
-      where("customerId", "==", uid),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
-      setLoading(false);
-    });
-
-    return () => unsub();
   }, [mounted]);
+
+  useEffect(() => {
+    if (!uid) return;
+
+    // ✅ Try with orderBy first, fallback without
+    const fetchOrders = () => {
+      try {
+        const q = query(
+          collection(db, "orders"),
+          where("customerId", "==", uid),
+          orderBy("createdAt", "desc")
+        );
+        const unsub = onSnapshot(q,
+          (snap) => {
+            setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
+            setLoading(false);
+          },
+          () => {
+            // Fallback without orderBy if index missing
+            const q2 = query(collection(db, "orders"), where("customerId", "==", uid));
+            onSnapshot(q2, (snap) => {
+              const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+              list.sort((a, b) => {
+                const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
+                  ? (a.createdAt.toDate?.()?.getTime() ?? 0) : 0;
+                const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
+                  ? (b.createdAt.toDate?.()?.getTime() ?? 0) : 0;
+                return bTime - aTime;
+              });
+              setOrders(list);
+              setLoading(false);
+            });
+          }
+        );
+        return unsub;
+      } catch {
+        setLoading(false);
+      }
+    };
+
+    const unsub = fetchOrders();
+    return () => { if (unsub) unsub(); };
+  }, [uid]);
 
   const formatDate = (ts: Order["createdAt"]) => {
     if (!ts) return "";
-    const date = typeof ts === "object" && ts !== null && "toDate" in ts ? ts.toDate() : new Date(ts as string | number);
+    const date = ts && typeof ts === "object" && "toDate" in ts
+      ? ts.toDate?.() ?? new Date()
+      : new Date(ts as string | number);
     return date.toLocaleDateString("en-IN", {
       day: "numeric", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit"
@@ -128,7 +160,9 @@ export default function HistoryPage() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-xs text-muted">{formatDate(order.createdAt)}</p>
-                  <p className="text-xs text-muted font-mono mt-0.5">{order.razorpayPaymentId?.slice(0, 15)}...</p>
+                  {order.razorpayPaymentId && (
+                    <p className="text-xs text-muted font-mono mt-0.5">{order.razorpayPaymentId.slice(0, 15)}...</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${STATUS_COLOR[order.orderStatus] || STATUS_COLOR.placed}`}>
@@ -140,13 +174,13 @@ export default function HistoryPage() {
 
               {/* Items */}
               <div className="space-y-1 mb-3">
-                {order.items?.slice(0, 2).map((item: OrderItem, idx: number) => (
+                {order.items?.slice(0, 2).map((item, idx) => (
                   <p key={idx} className="text-sm text-foreground">
                     <span className="text-primary font-bold">{item.quantity}x</span> {item.name}
                   </p>
                 ))}
-                {(order.items?.length ?? 0) > 2 && (
-                  <p className="text-xs text-muted">+{(order.items?.length ?? 0) - 2} more items</p>
+                {order.items && order.items.length > 2 && (
+                  <p className="text-xs text-muted">+{order.items.length - 2} more items</p>
                 )}
               </div>
 
