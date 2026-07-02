@@ -100,7 +100,7 @@ export default function CategoryPage() {
   // ✅ Real-time vendor duty status (onSnapshot)
   const setupVendorListeners = useCallback(() => {
     if (foods.length === 0) return;
-    const uniqueStallNames = [...new Set(foods.map(f => f.stallName).filter(Boolean))];
+    const uniqueStallNames = Array.from(new Set(foods.map(f => f.stallName).filter(Boolean))) as string[];
     if (uniqueStallNames.length === 0) return;
 
     const unsubscribers: (() => void)[] = [];
