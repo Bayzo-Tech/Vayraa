@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { signInWithCustomToken } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
 
 function LoginPageContent() {
   const router = useRouter();
@@ -48,6 +49,24 @@ function LoginPageContent() {
       });
       const data = await res.json();
       if (data.success) {
+        // ✅ FIX: Firebase Auth-ல sign-in பண்றோம் using the custom token
+        // இது இல்லாம onAuthStateChanged எப்பவும் null தான் கொடுக்கும், Payment fail ஆகும்
+        if (data.token) {
+          try {
+            await signInWithCustomToken(auth, data.token);
+          } catch (signInErr) {
+            console.error("Firebase custom token sign-in failed:", signInErr);
+            setError("Login failed. Please try again.");
+            setLoading(false);
+            return;
+          }
+        } else {
+          console.error("No token returned from verify-otp API");
+          setError("Login failed. Please try again.");
+          setLoading(false);
+          return;
+        }
+
         // Save user to localStorage
         const uid = `91${phone}`;
         let profileComplete = false;
