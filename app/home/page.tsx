@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Search, ShoppingCart, ClipboardList, User, Home } from "lucide-react";
 
@@ -27,6 +27,7 @@ interface CartItem {
 export default function HomePage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -57,15 +58,20 @@ export default function HomePage() {
     } catch { }
   }, [mounted]);
 
-  // ✅ Fetch banners from Firestore
+  // ✅ Fetch banners
   useEffect(() => {
     const fetchBanners = async () => {
       try {
         const snap = await getDocs(query(collection(db, "banners"), orderBy("orderIndex", "asc")));
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Banner));
-        setBanners(list);
+        setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)));
       } catch {
-        setBanners([]);
+        // fallback: try without orderBy
+        try {
+          const snap = await getDocs(collection(db, "banners"));
+          setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)));
+        } catch {
+          setBanners([]);
+        }
       }
     };
     fetchBanners();
@@ -80,25 +86,33 @@ export default function HomePage() {
     return () => { if (bannerInterval.current) clearInterval(bannerInterval.current); };
   }, [banners]);
 
-  // ✅ Fetch categories — area based filter (OLD LOGIC)
+  // ✅ Fetch ALL categories first, then filter by area
+  const fetchCategories = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, "categories"));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+      setAllCategories(all);
+    } catch { }
+  }, []);
+
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        let q;
-        if (area) {
-          q = query(
-            collection(db, "categories"),
-            where("area", "in", [area, "Both"])
-          );
-        } else {
-          q = query(collection(db, "categories"));
-        }
-        const snap = await getDocs(q);
-        setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
-      } catch { }
-    };
     fetchCategories();
-  }, [area]);
+  }, [fetchCategories]);
+
+  // ✅ Filter categories by area
+  useEffect(() => {
+    if (!area || allCategories.length === 0) {
+      setCategories(allCategories);
+      return;
+    }
+    const filtered = allCategories.filter(cat => {
+      if (!cat.area) return true; // no area field = show everywhere
+      const catArea = cat.area.toLowerCase().trim();
+      const selectedArea = area.toLowerCase().trim();
+      return catArea === selectedArea || catArea === "both";
+    });
+    setCategories(filtered);
+  }, [area, allCategories]);
 
   const filteredCategories = categories.filter(cat =>
     cat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -134,11 +148,13 @@ export default function HomePage() {
           </div>
         </button>
         <h1 className="text-lg font-bold text-foreground">Hello, {customerName}!</h1>
-        <button
-          onClick={() => setShowProfileMenu(!showProfileMenu)}
-          className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm relative"
-        >
-          {customerName.charAt(0).toUpperCase()}
+        <div className="relative">
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm"
+          >
+            {customerName.charAt(0).toUpperCase()}
+          </button>
           {showProfileMenu && (
             <div className="absolute top-11 right-0 bg-card border border-border rounded-xl shadow-lg py-2 w-36 z-50">
               <button
@@ -149,7 +165,7 @@ export default function HomePage() {
               </button>
             </div>
           )}
-        </button>
+        </div>
       </div>
 
       {/* ✅ Hero Banner */}
@@ -169,48 +185,51 @@ export default function HomePage() {
                 />
               </div>
             ))}
-            {/* Dots */}
             {banners.length > 1 && (
-              <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-1.5 z-10">
+              <div className="absolute bottom-14 left-0 right-0 flex justify-center gap-1.5 z-10">
                 {banners.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentBanner(idx)}
-                    className={`w-2 h-2 rounded-full transition-all ${idx === currentBanner ? "bg-white w-4" : "bg-white/50"}`}
+                    className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "bg-white w-4" : "bg-white/50 w-1.5"}`}
                   />
                 ))}
               </div>
             )}
           </>
         ) : (
-          <div className="w-full h-full bg-primary flex items-center justify-center">
-            <p className="text-white text-xl font-bold text-center px-6">
+          <div className="w-full h-full bg-primary flex items-center justify-center px-6">
+            <p className="text-white text-xl font-bold text-center">
               What Beach Food Do You Want Today? 🏖️
             </p>
           </div>
         )}
 
-        {/* Search bar overlaid at bottom of banner */}
+        {/* ✅ FIXED: Search bar — white background, NOT orange */}
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 z-10">
-          <div className="flex items-center bg-background/95 backdrop-blur-sm rounded-2xl border border-border px-3 py-2.5 shadow-lg">
-            <Search size={16} className="text-muted mr-2 flex-shrink-0" />
+          <div className="flex items-center bg-white rounded-2xl border border-gray-200 px-3 py-2.5 shadow-lg">
+            <Search size={16} className="text-gray-400 mr-2 flex-shrink-0" />
             <input
               type="text"
               placeholder={`Search for ${categories[0]?.name || "food"}...`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent text-foreground text-sm outline-none placeholder:text-muted"
+              className="flex-1 bg-transparent text-gray-800 text-sm outline-none placeholder:text-gray-400"
             />
           </div>
         </div>
       </div>
 
-      {/* ✅ Category tabs — click goes to /category/[id] (OLD LOGIC) */}
+      {/* ✅ Categories grid — click goes to /category/[id] */}
       <div className="px-4 mt-4">
         <h2 className="text-base font-bold text-foreground mb-3">Categories</h2>
         {filteredCategories.length === 0 ? (
           <div className="text-center py-8 text-muted text-sm">
-            {searchQuery ? `No categories found for "${searchQuery}"` : "No categories available in this area"}
+            {searchQuery
+              ? `No categories found for "${searchQuery}"`
+              : area
+              ? `No categories available in ${area}`
+              : "No categories available"}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
@@ -245,53 +264,44 @@ export default function HomePage() {
       {/* ✅ Fixed Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
         <div className="flex items-center justify-around py-2 px-4">
-
-          {/* Home */}
           <button
             onClick={() => router.push("/home")}
-            className="flex flex-col items-center gap-0.5 py-1 px-3 text-primary"
+            className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
-            <Home size={22} />
+            <Home size={22} className="text-primary" />
             <span className="text-[10px] font-semibold text-primary">Home</span>
           </button>
-
-          {/* Cart */}
           <button
             onClick={() => router.push("/cart")}
-            className="flex flex-col items-center gap-0.5 py-1 px-3 text-muted relative"
+            className="flex flex-col items-center gap-0.5 py-1 px-3 relative"
           >
             <div className="relative">
-              <ShoppingCart size={22} />
+              <ShoppingCart size={22} className="text-muted" />
               {cartCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {cartCount}
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-semibold">Cart</span>
+            <span className="text-[10px] font-semibold text-muted">Cart</span>
           </button>
-
-          {/* Orders */}
           <button
             onClick={() => {
               const hasSession = document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
               router.push(hasSession ? "/history" : "/login?redirect=/history");
             }}
-            className="flex flex-col items-center gap-0.5 py-1 px-3 text-muted"
+            className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
-            <ClipboardList size={22} />
-            <span className="text-[10px] font-semibold">Orders</span>
+            <ClipboardList size={22} className="text-muted" />
+            <span className="text-[10px] font-semibold text-muted">Orders</span>
           </button>
-
-          {/* Profile */}
           <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex flex-col items-center gap-0.5 py-1 px-3 text-muted"
+            className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
-            <User size={22} />
-            <span className="text-[10px] font-semibold">Profile</span>
+            <User size={22} className="text-muted" />
+            <span className="text-[10px] font-semibold text-muted">Profile</span>
           </button>
-
         </div>
       </div>
 
