@@ -6,6 +6,7 @@ import Image from "next/image";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Search, ShoppingCart, ClipboardList, User, Home } from "lucide-react";
+import { useUser } from "@/context/UserContext";
 
 interface Category {
   id: string;
@@ -26,7 +27,7 @@ interface CartItem {
 
 export default function HomePage() {
   const router = useRouter();
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { area } = useUser(); // ✅ Get area from UserContext directly
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -34,7 +35,6 @@ export default function HomePage() {
   const [customerName, setCustomerName] = useState("there");
   const [cartCount, setCartCount] = useState(0);
   const [currentBanner, setCurrentBanner] = useState(0);
-  const [area, setArea] = useState<string | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const bannerInterval = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,8 +48,6 @@ export default function HomePage() {
         const user = JSON.parse(userStr);
         if (user.name) setCustomerName(user.name.split(" ")[0]);
       }
-      const savedArea = localStorage.getItem("vayra_area");
-      if (savedArea) setArea(savedArea);
       const cartStr = localStorage.getItem("bayzo_cart");
       if (cartStr) {
         const cart: CartItem[] = JSON.parse(cartStr);
@@ -65,7 +63,6 @@ export default function HomePage() {
         const snap = await getDocs(query(collection(db, "banners"), orderBy("orderIndex", "asc")));
         setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)));
       } catch {
-        // fallback: try without orderBy
         try {
           const snap = await getDocs(collection(db, "banners"));
           setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() } as Banner)));
@@ -86,12 +83,11 @@ export default function HomePage() {
     return () => { if (bannerInterval.current) clearInterval(bannerInterval.current); };
   }, [banners]);
 
-  // ✅ Fetch ALL categories first, then filter by area
+  // ✅ Fetch ALL categories
   const fetchCategories = useCallback(async () => {
     try {
       const snap = await getDocs(collection(db, "categories"));
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
-      setAllCategories(all);
+      setAllCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
     } catch { }
   }, []);
 
@@ -99,28 +95,25 @@ export default function HomePage() {
     fetchCategories();
   }, [fetchCategories]);
 
-  // ✅ Filter categories by area
-  useEffect(() => {
-    if (!area || allCategories.length === 0) {
-      setCategories(allCategories);
-      return;
+  // ✅ Filter categories by area from UserContext
+  const filteredCategories = allCategories.filter(cat => {
+    // Search filter
+    if (searchQuery && !cat.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
     }
-    const filtered = allCategories.filter(cat => {
-      if (!cat.area) return true; // no area field = show everywhere
-      const catArea = cat.area.toLowerCase().trim();
-      const selectedArea = area.toLowerCase().trim();
-      return catArea === selectedArea || catArea === "both";
-    });
-    setCategories(filtered);
-  }, [area, allCategories]);
-
-  const filteredCategories = categories.filter(cat =>
-    cat.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    // Area filter
+    if (!area) return true; // no area selected = show all
+    if (!cat.area) return true; // no area field = show everywhere
+    const catArea = cat.area.toLowerCase().trim();
+    const selectedArea = area.toLowerCase().trim();
+    return catArea === selectedArea || catArea === "both";
+  });
 
   const handleLogout = () => {
     try {
       localStorage.removeItem("user");
+      localStorage.removeItem("bayzo_area");
+      localStorage.removeItem("bayzo_zone");
       document.cookie = "bayzo_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     } catch { }
     router.push("/area");
@@ -137,10 +130,7 @@ export default function HomePage() {
 
       {/* Header */}
       <div className="sticky top-0 z-20 bg-background px-4 py-3 flex items-center justify-between border-b border-border">
-        <button
-          onClick={() => router.push("/area")}
-          className="p-2 text-foreground"
-        >
+        <button onClick={() => router.push("/area")} className="p-2 text-foreground">
           <div className="flex flex-col gap-1.5">
             <span className="w-5 h-0.5 bg-foreground block rounded-full"></span>
             <span className="w-5 h-0.5 bg-foreground block rounded-full"></span>
@@ -168,7 +158,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ✅ Hero Banner */}
+      {/* Hero Banner */}
       <div className="relative w-full h-52 overflow-hidden">
         {banners.length > 0 ? (
           <>
@@ -177,12 +167,7 @@ export default function HomePage() {
                 key={banner.id}
                 className={`absolute inset-0 transition-opacity duration-700 ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
               >
-                <Image
-                  src={banner.imageUrl}
-                  alt={`Banner ${idx + 1}`}
-                  fill
-                  className="object-cover"
-                />
+                <Image src={banner.imageUrl} alt={`Banner ${idx + 1}`} fill className="object-cover" />
               </div>
             ))}
             {banners.length > 1 && (
@@ -205,13 +190,13 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ✅ FIXED: Search bar — white background, NOT orange */}
+        {/* Search bar */}
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 z-10">
           <div className="flex items-center bg-white rounded-2xl border border-gray-200 px-3 py-2.5 shadow-lg">
             <Search size={16} className="text-gray-400 mr-2 flex-shrink-0" />
             <input
               type="text"
-              placeholder={`Search for ${categories[0]?.name || "food"}...`}
+              placeholder={`Search for ${allCategories[0]?.name || "food"}...`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="flex-1 bg-transparent text-gray-800 text-sm outline-none placeholder:text-gray-400"
@@ -220,9 +205,17 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ✅ Categories grid — click goes to /category/[id] */}
+      {/* Categories */}
       <div className="px-4 mt-4">
-        <h2 className="text-base font-bold text-foreground mb-3">Categories</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold text-foreground">Categories</h2>
+          {area && (
+            <span className="text-xs text-muted bg-card border border-border px-2 py-1 rounded-full">
+              📍 {area}
+            </span>
+          )}
+        </div>
+
         {filteredCategories.length === 0 ? (
           <div className="text-center py-8 text-muted text-sm">
             {searchQuery
@@ -240,12 +233,7 @@ export default function HomePage() {
                 className="relative rounded-2xl overflow-hidden bg-card border border-border aspect-square active:scale-95 transition-all shadow-sm"
               >
                 {cat.image ? (
-                  <Image
-                    src={cat.image}
-                    alt={cat.name}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={cat.image} alt={cat.name} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full bg-primary/10 flex items-center justify-center">
                     <span className="text-4xl">🍽️</span>
@@ -261,20 +249,14 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* ✅ Fixed Bottom Nav */}
+      {/* Fixed Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
         <div className="flex items-center justify-around py-2 px-4">
-          <button
-            onClick={() => router.push("/home")}
-            className="flex flex-col items-center gap-0.5 py-1 px-3"
-          >
+          <button onClick={() => router.push("/home")} className="flex flex-col items-center gap-0.5 py-1 px-3">
             <Home size={22} className="text-primary" />
             <span className="text-[10px] font-semibold text-primary">Home</span>
           </button>
-          <button
-            onClick={() => router.push("/cart")}
-            className="flex flex-col items-center gap-0.5 py-1 px-3 relative"
-          >
+          <button onClick={() => router.push("/cart")} className="flex flex-col items-center gap-0.5 py-1 px-3 relative">
             <div className="relative">
               <ShoppingCart size={22} className="text-muted" />
               {cartCount > 0 && (
