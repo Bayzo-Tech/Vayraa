@@ -166,14 +166,13 @@ export default function CategoryPage() {
       return groups;
     }, {} as Record<string, Food[]>);
 
-  // ✅ NEW: Firestore-ல price string-ஆ (extra space/decimal issue) save ஆயிருந்தாலும் clean number-ஆ parse பண்றோம்
+  // ✅ Firestore-ல price string-ஆ (extra space/decimal issue) save ஆயிருந்தாலும் clean number-ஆ parse பண்றோம்
   const cleanPrice = (raw: unknown): number => {
     if (typeof raw === "number") return raw;
     const numeric = parseFloat(String(raw).replace(/\s+/g, "").trim());
     return isNaN(numeric) ? 0 : numeric;
   };
 
-  // ✅ CHANGED: raw food.price நேரடியா use பண்றதுக்கு பதிலா cleanPrice() வழியா parse பண்றோம்
   const finalPrice = (food: Food) => {
     const basePrice = cleanPrice(food.price);
     if (food.offer && food.offer > 0) {
@@ -307,10 +306,11 @@ export default function CategoryPage() {
                             )}
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-foreground text-sm">₹{price}</span>
-                              {food.offer && food.offer > 0 && (
+                              {/* ✅ FIX: Boolean() wrap பண்ணி, food.offer === 0 ஆ இருந்தா literal "0" render ஆகுறதை தடுக்கிறோம் */}
+                              {Boolean(food.offer) && food.offer! > 0 && (
                                 <span className="line-through text-xs text-muted">₹{cleanPrice(food.price)}</span>
                               )}
-                              {food.offer && food.offer > 0 && (
+                              {Boolean(food.offer) && food.offer! > 0 && (
                                 <span className="text-xs text-green-500 font-semibold">{food.offer}% off</span>
                               )}
                             </div>
