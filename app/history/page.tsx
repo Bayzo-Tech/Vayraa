@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ArrowLeft, Package, ChevronRight } from "lucide-react";
+import BottomNav from "@/components/BottomNav";
 
 interface OrderItem {
   name: string;
@@ -69,7 +70,6 @@ export default function HistoryPage() {
   useEffect(() => {
     if (!uid) return;
 
-    // ✅ Try with orderBy first, fallback without
     const fetchOrders = () => {
       try {
         const q = query(
@@ -83,7 +83,6 @@ export default function HistoryPage() {
             setLoading(false);
           },
           () => {
-            // Fallback without orderBy if index missing
             const q2 = query(collection(db, "orders"), where("customerId", "==", uid));
             onSnapshot(q2, (snap) => {
               const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
@@ -137,7 +136,7 @@ export default function HistoryPage() {
         <h1 className="text-lg font-bold text-foreground">Order History</h1>
       </div>
 
-      <div className="flex-1 p-4 space-y-3">
+      <div className="flex-1 p-4 space-y-3 pb-24">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Package size={48} className="text-muted mb-4" />
@@ -172,7 +171,6 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              {/* Items */}
               <div className="space-y-1 mb-3">
                 {order.items?.slice(0, 2).map((item, idx) => (
                   <p key={idx} className="text-sm text-foreground">
@@ -192,7 +190,6 @@ export default function HistoryPage() {
                 <p className="font-bold text-foreground">₹{order.totalAmount}</p>
               </div>
 
-              {/* Active order indicator */}
               {['placed', 'preparing', 'out_for_delivery', 'ready_for_pickup'].includes(order.orderStatus) && (
                 <div className="mt-3 flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse inline-block"></span>
@@ -203,6 +200,9 @@ export default function HistoryPage() {
           ))
         )}
       </div>
+
+      <BottomNav />
+
     </div>
   );
 }

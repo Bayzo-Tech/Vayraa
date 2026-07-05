@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Minus, Trash2, ShoppingBag, Tag, X } from "lucide-react";
 import Image from "next/image";
 import { useUser } from "@/context/UserContext";
+import BottomNav from "@/components/BottomNav";
 
 type CartItem = {
   id: string;
@@ -125,7 +126,7 @@ export default function CartPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 pb-24">
         <div className="w-24 h-24 bg-card rounded-full flex items-center justify-center mb-6 border border-border">
           <ShoppingBag size={40} className="text-muted" />
         </div>
@@ -137,6 +138,7 @@ export default function CartPage() {
         >
           Browse Food
         </button>
+        <BottomNav />
       </div>
     );
   }
@@ -156,7 +158,7 @@ export default function CartPage() {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-40">
 
         {/* Cart Items */}
         <div className="space-y-3">
@@ -288,8 +290,8 @@ export default function CartPage() {
 
       </div>
 
-      {/* Fixed bottom button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+      {/* Fixed Pay button — sits above BottomNav */}
+      <div className="fixed bottom-16 left-0 right-0 p-4 bg-background border-t border-border z-40">
         <button
           onClick={() => {
             const hasSession = document.cookie.split("; ").some((row) => row.trim().startsWith("bayzo_session="));
@@ -307,6 +309,8 @@ export default function CartPage() {
           <span className="font-bold text-base">Proceed to Pay →</span>
         </button>
       </div>
+
+      <BottomNav />
 
     </div>
   );

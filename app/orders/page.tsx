@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { ArrowLeft, Copy, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
+import BottomNav from "@/components/BottomNav";
 
 interface Order {
   id: string;
@@ -45,7 +46,6 @@ export default function OrdersPage() {
 
     const fetchOrders = async () => {
       try {
-        // ✅ FIX: Both userId formats check பண்றோம்
         const normalizedUid =
           user.phoneNumber?.replace("+91", "91") || user.uid;
 
@@ -68,7 +68,6 @@ export default function OrdersPage() {
           allOrders = [...allOrders, ...fetched];
         }
 
-        // Duplicate remove (same order id)
         const seen = new Set();
         allOrders = allOrders.filter((o) => {
           if (seen.has(o.id)) return false;
@@ -76,7 +75,6 @@ export default function OrdersPage() {
           return true;
         });
 
-        // Sort by date in memory (bypasses Firestore index requirement)
         allOrders.sort((a, b) => {
           const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
           const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
@@ -134,7 +132,7 @@ export default function OrdersPage() {
         <h1 className="text-xl font-bold">Order History</h1>
       </div>
 
-      <div className="p-4 flex-1">
+      <div className="p-4 flex-1 pb-24">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-center">
             <span className="text-6xl mb-4">🏖️</span>
@@ -192,6 +190,9 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      <BottomNav />
+
     </div>
   );
 }
