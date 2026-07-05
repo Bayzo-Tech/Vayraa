@@ -38,7 +38,7 @@ type CartItem = {
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { user, area, zone, deliveryFee, authLoading } = useUser();
+  const { user, area, zone, deliveryFee, authLoading, beaches } = useUser();
   const [mounted, setMounted] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -85,6 +85,27 @@ export default function PaymentPage() {
     }
   }, [mounted, router]);
 
+  // ✅ NEW: localStorage-ல இருந்து phone/name synchronously prime பண்றோம் — Firestore fetch race condition தவிர்க்க
+  // Beach-ல weak network இருந்தா, Firestore fetch complete ஆகும் முன்னாடியே user Pay Now click பண்ணிடலாம்.
+  // localStorage-ல login பண்ணும்போதே இது already save ஆகி இருக்கும் (synchronous, guaranteed).
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const localUser = JSON.parse(userStr);
+        if (localUser.phoneNumber) {
+          setCustomerPhone(String(localUser.phoneNumber).replace("+91", ""));
+        }
+        if (localUser.name) {
+          setCustomerName(localUser.name);
+        }
+      }
+    } catch (e) {
+      console.error("localStorage user parse error:", e);
+    }
+  }, [mounted]);
+
   useEffect(() => {
     const fetchCustomerDetails = async () => {
       if (!user?.uid) return;
@@ -102,13 +123,10 @@ export default function PaymentPage() {
             data.phone?.replace(/^91/, "") ||
             user.uid.replace(/^91/, "") ||
             "";
-          setCustomerPhone(rawPhone);
-        } else {
-          setCustomerPhone(user.uid.replace(/^91/, ""));
+          if (rawPhone) setCustomerPhone(rawPhone);
         }
       } catch (e) {
         console.error("Error fetching customer details:", e);
-        setCustomerPhone(user.uid.replace(/^91/, ""));
       }
     };
     fetchCustomerDetails();
@@ -136,12 +154,8 @@ export default function PaymentPage() {
   };
 
   const handlePayment = async () => {
-    // TEMP DEBUG
-    console.log("[Payment] handlePayment clicked. user:", user, "typeof user:", typeof user, "user is null?", user === null, "authLoading:", authLoading, "razorpayLoaded:", razorpayLoaded, "isProcessing:", isProcessing, "at:", new Date().toISOString());
     if (!razorpayLoaded || isProcessing) return;
     if (!user) {
-      // TEMP DEBUG
-      console.log("[Payment] Blocked: user is falsy at click time ->", user);
       setFailMessage("You're not logged in. Please login and try again.");
       setShowFailPopup(true);
       return;
@@ -156,22 +170,14 @@ export default function PaymentPage() {
 
       let beachId = "";
       let zoneId = "";
-      try {
-        if (area) {
-          const beachSnap = await getDocs(collection(db, "beaches"));
-          for (const beachDoc of beachSnap.docs) {
-            const beachData = beachDoc.data();
-            if (beachData.area === area || beachData.name === area) {
-              beachId = beachDoc.id;
-              if (beachData.zones && zone !== null && beachData.zones[zone - 1]) {
-                zoneId = beachData.zones[zone - 1].name || `Zone ${zone}`;
-              }
-              break;
-            }
+      if (area) {
+        const matchedBeach = beaches.find((b) => b.area === area || b.name === area);
+        if (matchedBeach) {
+          beachId = matchedBeach.id;
+          if (zone !== null && matchedBeach.zones?.[zone - 1]) {
+            zoneId = matchedBeach.zones[zone - 1].name || `Zone ${zone}`;
           }
         }
-      } catch (err) {
-        console.error("Error looking up beach/zone mapping:", err);
       }
 
       const docRef = doc(collection(db, "orders"));

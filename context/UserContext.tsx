@@ -3,6 +3,21 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { User } from "firebase/auth";
 
+// ✅ NEW: Shared beach/zone types, exported so other pages can reuse without re-declaring
+export interface BeachZone {
+  name: string;
+  minDistance: number;
+  maxDistance: number;
+  fee: number;
+}
+
+export interface Beach {
+  id: string;
+  name: string;
+  area: string;
+  zones: BeachZone[];
+}
+
 interface UserContextType {
   user: User | null;
   setUser: (user: User | null) => void;
@@ -14,13 +29,15 @@ interface UserContextType {
   deliveryFee: number;
   setDeliveryFee: (fee: number) => void;
   authLoading: boolean;
+  beaches: Beach[]; // ✅ NEW: raw beaches list, shared across the app
+  beachesLoading: boolean; // ✅ NEW
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, getDocs, onSnapshot, query } from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot, query } from "firebase/firestore";
 
 // ✅ FIX: SSR-safe localStorage - OnePlus/Samsung crash fix
 const safeLocalStorage = {
@@ -46,7 +63,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [zone, setZone] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [deliveryFee, setDeliveryFee] = useState<number>(10);
-  const [authLoading, setAuthLoading] = useState<boolean>(true); // NEW
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  // ✅ NEW: single shared beaches listener + loading flag
+  const [beaches, setBeaches] = useState<Beach[]>([]);
+  const [beachesLoading, setBeachesLoading] = useState<boolean>(true);
 
   useEffect(() => {
     setMounted(true);
@@ -64,23 +85,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     let logoutTimer: ReturnType<typeof setTimeout> | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // TEMP DEBUG
-      console.log("[UserContext] onAuthStateChanged fired. currentUser:", currentUser, "uid:", currentUser?.uid, "at:", new Date().toISOString());
       if (currentUser) {
         if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; }
         isFirstAuthCheck.current = false;
         try {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          // TEMP DEBUG
-          console.log("[UserContext] getDoc(users/" + currentUser.uid + ") exists:", userDoc.exists());
           if (userDoc.exists()) {
             setUser(currentUser);
             setRole(userDoc.data().role || "user");
-            // TEMP DEBUG
-            console.log("[UserContext] setUser called with currentUser, role:", userDoc.data().role || "user");
           } else {
-            // TEMP DEBUG
-            console.log("[UserContext] userDoc did NOT exist for uid:", currentUser.uid, "-> forcing signOut + redirect to /login");
             await signOut(auth);
             document.cookie = "bayzo_session=; path=/; max-age=0";
             safeLocalStorage.remove("bayzo_token");
@@ -97,21 +110,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             window.location.href = "/login";
           }
         } catch (error) {
-          // TEMP DEBUG
-          console.log("[UserContext] getDoc threw an error, falling back to setUser(currentUser):", error);
           console.error("Error fetching user:", error);
           setUser(currentUser);
           setRole("user");
         }
-        setAuthLoading(false); // NEW
-        // TEMP DEBUG
-        console.log("[UserContext] authLoading set to false (currentUser branch)");
+        setAuthLoading(false);
       } else {
-        // TEMP DEBUG
-        console.log("[UserContext] currentUser is null. isFirstAuthCheck:", isFirstAuthCheck.current, "-> scheduling 3s logoutTimer");
         logoutTimer = setTimeout(() => {
-          // TEMP DEBUG
-          console.log("[UserContext] logoutTimer FIRED (3s elapsed with no sign-in). isFirstAuthCheck was:", isFirstAuthCheck.current);
           if (isFirstAuthCheck.current) {
             isFirstAuthCheck.current = false;
             setUser(null);
@@ -123,9 +128,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
             setRole(null);
           }
-          setAuthLoading(false); // NEW
-          // TEMP DEBUG
-          console.log("[UserContext] authLoading set to false (logoutTimer branch)");
+          setAuthLoading(false);
         }, 3000);
       }
     });
@@ -136,7 +139,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
   }, [mounted]);
 
-  // Real-time listener for the delivery fee based on area and zone
+  // ✅ NEW: ONE live listener for the entire beaches collection — shared everywhere via context
+  useEffect(() => {
+    if (!mounted) return;
+    const q = query(collection(db, "beaches"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: Beach[] = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Beach));
+      setBeaches(list);
+      setBeachesLoading(false);
+    }, (error) => {
+      console.error("Beaches listener error:", error);
+      setBeachesLoading(false);
+    });
+    return () => unsubscribe();
+  }, [mounted]);
+
+  // ✅ CHANGED: deliveryFee now derives from the shared `beaches` array instead of its own onSnapshot query
   useEffect(() => {
     if (!mounted) return;
     if (!area || zone === null) {
@@ -145,28 +163,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const q = query(collection(db, "beaches"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let foundFee = 10;
-      const matchedBeach = snapshot.docs.find((beachDoc) => {
-        const beachData = beachDoc.data();
-        return beachData.name === area || beachData.area === area;
-      });
-      if (matchedBeach) {
-        const zones: { fee?: number; name?: string }[] = matchedBeach.data().zones || [];
-        const matchedZone = zones[zone - 1];
-        if (matchedZone && matchedZone.fee !== undefined) {
-          foundFee = Number(matchedZone.fee);
-        }
+    let foundFee = 10;
+    const matchedBeach = beaches.find((b) => b.name === area || b.area === area);
+    if (matchedBeach) {
+      const matchedZone = matchedBeach.zones?.[zone - 1];
+      if (matchedZone && matchedZone.fee !== undefined) {
+        foundFee = Number(matchedZone.fee);
       }
-      setDeliveryFee(foundFee);
-      safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
-    }, (error) => {
-      console.error("Real-time fee fetch error:", error);
-    });
-
-    return () => unsubscribe();
-  }, [area, zone, mounted]);
+    }
+    setDeliveryFee(foundFee);
+    safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
+  }, [area, zone, mounted, beaches]);
 
   const handleSetArea = (newArea: string) => {
     setArea(newArea);
@@ -175,7 +182,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const handleSetZoneWithFee = async (newZone: number | null, beachArea?: string) => {
+  // ✅ CHANGED: no longer calls getDocs itself — reads from the already-fetched `beaches` state
+  const handleSetZoneWithFee = (newZone: number | null, beachArea?: string) => {
     setZone(newZone);
     if (mounted) {
       if (newZone !== null) {
@@ -193,28 +201,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    try {
-      const targetArea = beachArea || area;
-      const beachSnap = await getDocs(collection(db, "beaches"));
-      let foundFee = 10;
-      const matchedBeach = beachSnap.docs.find((beachDoc) => {
-        const beachData = beachDoc.data();
-        return beachData.name === targetArea || beachData.area === targetArea;
-      });
-      if (matchedBeach) {
-        const zones: { fee?: number; name?: string }[] = matchedBeach.data().zones || [];
-        const matchedZone = zones[newZone - 1];
-        if (matchedZone && matchedZone.fee !== undefined) {
-          foundFee = Number(matchedZone.fee);
-        }
+    const targetArea = beachArea || area;
+    let foundFee = 10;
+    const matchedBeach = beaches.find((b) => b.name === targetArea || b.area === targetArea);
+    if (matchedBeach) {
+      const matchedZone = matchedBeach.zones?.[newZone - 1];
+      if (matchedZone && matchedZone.fee !== undefined) {
+        foundFee = Number(matchedZone.fee);
       }
-      setDeliveryFee(foundFee);
-      if (mounted) {
-        safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
-      }
-    } catch (e) {
-      console.error("Fee fetch error:", e);
-      setDeliveryFee(10);
+    }
+    setDeliveryFee(foundFee);
+    if (mounted) {
+      safeLocalStorage.set("bayzo_delivery_fee", foundFee.toString());
     }
   };
 
@@ -226,6 +224,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       role,
       deliveryFee, setDeliveryFee,
       authLoading,
+      beaches, // ✅ NEW
+      beachesLoading, // ✅ NEW
     }}>
       {children}
     </UserContext.Provider>

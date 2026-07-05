@@ -4,59 +4,33 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { MapPin, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-
-interface Zone {
-  name: string;
-  minDistance: number;
-  maxDistance: number;
-  fee: number;
-}
-
-interface Beach {
-  id: string;
-  name: string;
-  area: string;
-  zones: Zone[];
-}
 
 interface AreaGroup {
   name: string;
-  beaches: Beach[];
+  beaches: { id: string; name: string; zones: { name: string; minDistance: number; maxDistance: number; fee: number }[] }[];
 }
 
 export default function AreaSelectionPage() {
   const router = useRouter();
-  const { setArea, setZone, area: savedArea, zone: savedZone } = useUser();
+  // ✅ CHANGED: beaches + beachesLoading now come from context instead of a local getDocs fetch
+  const { setArea, setZone, area: savedArea, zone: savedZone, beaches, beachesLoading } = useUser();
 
   const [areaGroups, setAreaGroups] = useState<AreaGroup[]>([]);
-  const [loadingAreas, setLoadingAreas] = useState(true);
   const [expandedArea, setExpandedArea] = useState<string | null>(savedArea || null);
   const [selectedAreaName, setSelectedAreaName] = useState<string | null>(savedArea || null);
   const [selectedZoneNum, setSelectedZoneNum] = useState<number | null>(savedZone || null);
   const [selectedFee, setSelectedFee] = useState<number | null>(null);
 
+  // ✅ CHANGED: group the already-fetched `beaches` array instead of running getDocs here
   useEffect(() => {
-    const fetchBeaches = async () => {
-      try {
-        const snap = await getDocs(collection(db, "beaches"));
-        const beaches: Beach[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Beach));
-        const grouped: Record<string, Beach[]> = {};
-        beaches.forEach(b => {
-          if (!grouped[b.area]) grouped[b.area] = [];
-          grouped[b.area].push(b);
-        });
-        const groups: AreaGroup[] = Object.entries(grouped).map(([name, beaches]) => ({ name, beaches }));
-        setAreaGroups(groups);
-      } catch (err) {
-        console.error("Error fetching beaches:", err);
-      } finally {
-        setLoadingAreas(false);
-      }
-    };
-    fetchBeaches();
-  }, []);
+    const grouped: Record<string, AreaGroup["beaches"]> = {};
+    beaches.forEach((b) => {
+      if (!grouped[b.area]) grouped[b.area] = [];
+      grouped[b.area].push({ id: b.id, name: b.name, zones: b.zones || [] });
+    });
+    const groups: AreaGroup[] = Object.entries(grouped).map(([name, list]) => ({ name, beaches: list }));
+    setAreaGroups(groups);
+  }, [beaches]);
 
   const handleConfirm = () => {
     if (selectedAreaName && selectedZoneNum) {
@@ -75,7 +49,7 @@ export default function AreaSelectionPage() {
           <p className="text-muted">Where are you enjoying the beach?</p>
         </div>
 
-        {loadingAreas ? (
+        {beachesLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="animate-spin text-primary w-8 h-8" />
           </div>
