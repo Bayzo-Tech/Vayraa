@@ -23,6 +23,15 @@ type FoodItem = {
 
 type CartItem = FoodItem & { quantity: number };
 
+// ✅ NEW: Cloudinary URL-ல f_auto,q_auto transform inject பண்ணி
+// auto WebP/AVIF format + auto quality serve பண்ண வைக்குறோம்.
+const optimizeCloudinaryUrl = (url?: string): string => {
+  if (!url) return "";
+  if (!url.includes("res.cloudinary.com")) return url;
+  if (url.includes("f_auto") || url.includes("q_auto")) return url;
+  return url.replace("/upload/", "/upload/f_auto,q_auto/");
+};
+
 export default function FoodDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { area, zone } = useUser();
@@ -94,7 +103,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
     } else if (idx >= 0) {
       cart[idx].quantity = newQty;
     } else {
-      // ✅ FIX: packingFee save பண்றோம்
       cart.push({
         id: food.id,
         name: food.name,
@@ -144,7 +152,7 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
 
         {food.image ? (
           <Image
-            src={food.image}
+            src={optimizeCloudinaryUrl(food.image)}
             alt={food.name}
             fill
             className="object-cover"
@@ -197,7 +205,6 @@ export default function FoodDetailPage({ params }: { params: { id: string } }) {
           )}
         </div>
 
-        {/* ✅ Packing fee display */}
         {food.packingFee && food.packingFee > 0 ? (
           <div className="mb-4 bg-card rounded-xl border border-border px-3 py-2 flex items-center gap-2">
             <span className="text-sm">📦</span>
