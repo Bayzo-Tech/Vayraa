@@ -29,6 +29,16 @@ interface CartItem extends Food {
   quantity: number;
 }
 
+// ✅ NEW: Cloudinary URL-ல f_auto,q_auto transform inject பண்ணி
+// auto WebP/AVIF format + auto quality serve பண்ண வைக்குறோம்.
+// Cloudinary URL இல்லாத images (or already transformed ones) தொடமாட்டோம்.
+const optimizeCloudinaryUrl = (url?: string): string => {
+  if (!url) return "";
+  if (!url.includes("res.cloudinary.com")) return url;
+  if (url.includes("f_auto") || url.includes("q_auto")) return url;
+  return url.replace("/upload/", "/upload/f_auto,q_auto/");
+};
+
 export default function CategoryPage() {
   const params = useParams();
   const router = useRouter();
@@ -97,24 +107,39 @@ export default function CategoryPage() {
     fetchFoods();
   }, [categoryId]);
 
-  // ✅ Real-time vendor duty status (onSnapshot)
+  // ✅ CHANGED: N separate onSnapshot listeners (one per stall) → ஒரே single
+  // onSnapshot listener using where("stallName","in",[...]). Firestore "in"
+  // query max 30 values ஏத்துக்கும் — உங்க category-க்கு stall count அதுக்குள்ள
+  // இருக்கும்னு assume பண்றோம் (typical case). Listener count இப்போ vendor
+  // count-ஐ சாராது, category-க்கு எப்போதும் 1 listener மட்டும்.
   const setupVendorListeners = useCallback(() => {
     if (foods.length === 0) return;
     const uniqueStallNames = Array.from(new Set(foods.map(f => f.stallName).filter(Boolean))) as string[];
     if (uniqueStallNames.length === 0) return;
 
+    // Firestore "in" query 30 values வரைக்கும் மட்டும் support பண்ணும்.
+    // 30-க்கு மேல stalls இருந்தா, batch பண்ணி multiple queries run பண்றோம்.
+    const batches: string[][] = [];
+    for (let i = 0; i < uniqueStallNames.length; i += 30) {
+      batches.push(uniqueStallNames.slice(i, i + 30));
+    }
+
     const unsubscribers: (() => void)[] = [];
 
-    uniqueStallNames.forEach(stallName => {
-      const q = query(collection(db, "vendors"), where("stallName", "==", stallName));
+    batches.forEach((batch) => {
+      const q = query(collection(db, "vendors"), where("stallName", "in", batch));
       const unsub = onSnapshot(q, (snap) => {
-        if (!snap.empty) {
-          const vendorData = snap.docs[0].data();
-          setVendorOpenMap(prev => ({
-            ...prev,
-            [stallName as string]: vendorData.isOnDuty === true,
-          }));
-        }
+        setVendorOpenMap(prev => {
+          const next = { ...prev };
+          snap.docs.forEach((docSnap) => {
+            const vendorData = docSnap.data();
+            const stallName = vendorData.stallName as string | undefined;
+            if (stallName) {
+              next[stallName] = vendorData.isOnDuty === true;
+            }
+          });
+          return next;
+        });
       });
       unsubscribers.push(unsub);
     });
@@ -279,7 +304,7 @@ export default function CategoryPage() {
                         <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
                           {food.image ? (
                             <Image
-                              src={food.image}
+                              src={optimizeCloudinaryUrl(food.image)}
                               alt={food.name}
                               fill
                               className={`object-cover ${!isStallOpen ? "grayscale" : ""}`}
@@ -306,7 +331,6 @@ export default function CategoryPage() {
                             )}
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-foreground text-sm">₹{price}</span>
-                              {/* ✅ FIX: Boolean() wrap பண்ணி, food.offer === 0 ஆ இருந்தா literal "0" render ஆகுறதை தடுக்கிறோம் */}
                               {Boolean(food.offer) && food.offer! > 0 && (
                                 <span className="line-through text-xs text-muted">₹{cleanPrice(food.price)}</span>
                               )}
