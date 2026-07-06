@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -10,25 +9,10 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setMounted(true);
-
-    // Check if session cookie exists
-    const hasSession = typeof document !== "undefined" && document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
-    
-    if (hasSession) {
-      setTimeout(() => router.replace("/home"), 2000);
-      return;
-    }
-
-    // Subscribe to firebase auth state
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setTimeout(() => router.replace("/home"), 2000);
-      } else {
-        setTimeout(() => router.replace("/area"), 2000);
-      }
-    });
-
-    return () => unsubscribe();
+    // ✅ CHANGED: area/zone screen எப்போதும் கட்டாயம் காட்டணும் —
+    // login/session state, saved area எதுவா இருந்தாலும் சரி,
+    // splash-க்கு அப்புறம் நேரடியா /area-க்கே போகணும்.
+    setTimeout(() => router.replace("/area"), 2000);
   }, [router]);
 
   return (
