@@ -21,40 +21,36 @@ export async function POST(req: NextRequest) {
 
     if (event.event === "payment.captured") {
       const payment = event.payload.payment.entity;
-      const razorpayOrderId = payment.order_id;
-      const razorpayPaymentId = payment.id; // pay_XXXXXXX
+      const razorpayPaymentId = payment.id;
 
-      // Try camelCase first (how client saves it)
-      let existingOrder = await db
-        .collection("orders")
-        .where("razorpayOrderId", "==", razorpayOrderId)
-        .limit(1)
-        .get();
+      // ✅ CHANGED: razorpayOrderId query-க்கு பதிலா, notes-ல client அனுப்பின
+      // firestoreOrderId-ஐ வெச்சு direct doc lookup பண்றோம் — query தேவையில்ல,
+      // camelCase/snake_case guessing தேவையில்ல
+      const firestoreOrderId = payment.notes?.firestoreOrderId;
 
-      // Fallback: try snake_case
-      if (existingOrder.empty) {
-        existingOrder = await db
-          .collection("orders")
-          .where("razorpay_order_id", "==", razorpayOrderId)
-          .limit(1)
-          .get();
+      if (!firestoreOrderId) {
+        console.warn("⚠️ Webhook: no firestoreOrderId in payment.notes, skipping");
+        return NextResponse.json({ status: "ok" });
       }
 
-      if (!existingOrder.empty) {
-        const orderDoc = existingOrder.docs[0];
-        await orderDoc.ref.update({
-          status: "placed",
-          paymentStatus: "paid",        // camelCase — matches your admin panel
-          payment_status: "paid",        // snake_case — fallback
-          razorpayPaymentId: razorpayPaymentId, // This shows Payment ID in admin ✅
-          updatedAt: new Date().toISOString(),
-        });
+      const orderRef = db.collection("orders").doc(firestoreOrderId);
+      const orderSnap = await orderRef.get();
 
-        console.log(`✅ Webhook: Order ${orderDoc.id} updated to placed+paid`);
-        return NextResponse.json({ status: "updated" });
+      if (!orderSnap.exists) {
+        console.warn(`⚠️ Webhook: order doc ${firestoreOrderId} not found`);
+        return NextResponse.json({ status: "ok" });
       }
 
-      console.warn(`⚠️ Webhook: No order found for razorpay_order_id ${razorpayOrderId}`);
+      await orderRef.set({
+        status: "placed",
+        orderStatus: "placed",
+        paymentStatus: "paid",
+        razorpayPaymentId,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      console.log(`✅ Webhook: Order ${firestoreOrderId} updated to placed+paid`);
+      return NextResponse.json({ status: "updated" });
     }
 
     return NextResponse.json({ status: "ok" });

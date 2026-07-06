@@ -85,9 +85,6 @@ export default function PaymentPage() {
     }
   }, [mounted, router]);
 
-  // ✅ NEW: localStorage-ல இருந்து phone/name synchronously prime பண்றோம் — Firestore fetch race condition தவிர்க்க
-  // Beach-ல weak network இருந்தா, Firestore fetch complete ஆகும் முன்னாடியே user Pay Now click பண்ணிடலாம்.
-  // localStorage-ல login பண்ணும்போதே இது already save ஆகி இருக்கும் (synchronous, guaranteed).
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -183,63 +180,87 @@ export default function PaymentPage() {
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
 
+      // ✅ NEW: Order-ஐ Razorpay checkout open ஆகுறதுக்கு முன்னாடியே Firestore-ல create பண்றோம்
+      // (paymentStatus: "created"). இப்படி பண்றதால், webhook (server-side, Razorpay-இருந்து நேரடியா
+      // வரும்) இந்த doc-ஐ கண்டுபிடிச்சு "paid" ஆக update பண்ண முடியும் — user browser-க்கு
+      // திரும்ப காத்திருக்க வேண்டாம்.
+      const orderPayload = {
+        orderId,
+        customerId: user?.uid || normalizedUserId,
+        customerName,
+        customerPhone,
+        vendorName,
+        vendorId,
+        itemsSummary,
+        phone: user?.phoneNumber || customerPhone || "unknown",
+        location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
+        items: cart.map((i) => ({
+          name: i.name,
+          price: finalPrice(i),
+          quantity: i.quantity,
+          stallName: i.stallName,
+        })),
+        itemTotal: subtotal,
+        deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
+        packingFee: orderType === "dinein" ? 0 : totalPackingFee,
+        totalAmount: total,
+        orderType,
+        paymentMethod: "razorpay",
+        paymentStatus: "created", // ✅ NEW: webhook/handler இது "paid"-ஆ மாத்தும்
+        status: "pending",         // ✅ NEW: "placed" ஆவது payment success ஆனா தான்
+        orderStatus: "pending",
+        createdAt: serverTimestamp(),
+        beachId,
+        zoneId,
+        userId: normalizedUserId,
+      };
+
+      try {
+        await setDoc(docRef, orderPayload);
+      } catch (err) {
+        console.error("Pre-payment order create failed:", err);
+        setIsProcessing(false);
+        setFailMessage("Could not initiate order. Please try again.");
+        setShowFailPopup(true);
+        return;
+      }
+
       const options: Record<string, unknown> = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: total * 100,
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
+        // ✅ NEW: firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
+        // exact document-ஐ direct-ஆ கண்டுபிடிக்கும், query தேவையில்ல
+        notes: { firestoreOrderId: orderId },
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
+          // ✅ CHANGED: இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
           let saveSuccess = false;
           let lastError = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               await setDoc(docRef, {
-                orderId,
-                customerId: user?.uid || normalizedUserId,
-                customerName,
-                customerPhone,
-                vendorName,
-                vendorId,
-                itemsSummary,
-                phone: user?.phoneNumber || customerPhone || "unknown",
-                location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
-                items: cart.map((i) => ({
-                  name: i.name,
-                  price: finalPrice(i),
-                  quantity: i.quantity,
-                  stallName: i.stallName,
-                })),
-                itemTotal: subtotal,
-                deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
-                packingFee: orderType === "dinein" ? 0 : totalPackingFee,
-                totalAmount: total,
-                orderType,
-                paymentMethod: "razorpay",
                 paymentStatus: "paid",
                 status: "placed",
                 orderStatus: "placed",
-                createdAt: serverTimestamp(),
-                beachId,
-                zoneId,
-                userId: normalizedUserId,
                 razorpayOrderId: response.razorpay_order_id || "",
                 razorpayPaymentId: response.razorpay_payment_id || "",
-              });
+              }, { merge: true });
               saveSuccess = true;
               break;
             } catch (err) {
               lastError = err;
-              console.error(`Firestore save attempt ${attempt} failed:`, err);
+              console.error(`Firestore update attempt ${attempt} failed:`, err);
               if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             }
           }
 
           if (!saveSuccess) {
-            console.error("All 3 Firestore save attempts failed:", lastError);
+            console.error("All 3 Firestore update attempts failed:", lastError);
           }
 
           try { localStorage.removeItem("bayzo_cart"); } catch (e) { console.error(e); }
