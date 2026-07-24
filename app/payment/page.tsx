@@ -180,7 +180,7 @@ export default function PaymentPage() {
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
 
-      // ✅ NEW: Order-ஐ Razorpay checkout open ஆகுறதுக்கு முன்னாடியே Firestore-ல create பண்றோம்
+      // ✅ Order-ஐ Razorpay checkout open ஆகுறதுக்கு முன்னாடியே Firestore-ல create பண்றோம்
       // (paymentStatus: "created"). இப்படி பண்றதால், webhook (server-side, Razorpay-இருந்து நேரடியா
       // வரும்) இந்த doc-ஐ கண்டுபிடிச்சு "paid" ஆக update பண்ண முடியும் — user browser-க்கு
       // திரும்ப காத்திருக்க வேண்டாம்.
@@ -195,6 +195,7 @@ export default function PaymentPage() {
         phone: user?.phoneNumber || customerPhone || "unknown",
         location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
         items: cart.map((i) => ({
+          foodId: i.id, // ✅ NEW: rating system-ku venum — food-level rating attach panna idhu mandatory
           name: i.name,
           price: finalPrice(i),
           quantity: i.quantity,
@@ -206,8 +207,8 @@ export default function PaymentPage() {
         totalAmount: total,
         orderType,
         paymentMethod: "razorpay",
-        paymentStatus: "created", // ✅ NEW: webhook/handler இது "paid"-ஆ மாத்தும்
-        status: "pending",         // ✅ NEW: "placed" ஆவது payment success ஆனா தான்
+        paymentStatus: "created", // ✅ webhook/handler இது "paid"-ஆ மாத்தும்
+        status: "pending",         // ✅ "placed" ஆவது payment success ஆனா தான்
         orderStatus: "pending",
         createdAt: serverTimestamp(),
         beachId,
@@ -231,14 +232,14 @@ export default function PaymentPage() {
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        // ✅ NEW: firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
+        // ✅ firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
         // exact document-ஐ direct-ஆ கண்டுபிடிக்கும், query தேவையில்ல
         notes: { firestoreOrderId: orderId },
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
-          // ✅ CHANGED: இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
+          // ✅ இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
           let saveSuccess = false;
           let lastError = null;
           for (let attempt = 1; attempt <= 3; attempt++) {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, ShoppingCart, ClipboardList, User, Home } from "lucide-react";
+import { Search, ShoppingCart, ClipboardList, User, Home, Star } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 
 interface Category {
@@ -13,6 +13,7 @@ interface Category {
   name: string;
   image?: string;
   area?: string;
+  rating?: number;
 }
 
 interface Banner {
@@ -27,7 +28,7 @@ interface CartItem {
 
 export default function HomePage() {
   const router = useRouter();
-  const { area } = useUser(); // ✅ Get area from UserContext directly
+  const { area } = useUser();
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,7 +57,6 @@ export default function HomePage() {
     } catch { }
   }, [mounted]);
 
-  // ✅ Fetch banners
   useEffect(() => {
     const fetchBanners = async () => {
       try {
@@ -74,7 +74,6 @@ export default function HomePage() {
     fetchBanners();
   }, []);
 
-  // ✅ Auto-slide banner every 2 seconds
   useEffect(() => {
     if (banners.length <= 1) return;
     bannerInterval.current = setInterval(() => {
@@ -83,7 +82,6 @@ export default function HomePage() {
     return () => { if (bannerInterval.current) clearInterval(bannerInterval.current); };
   }, [banners]);
 
-  // ✅ Fetch ALL categories
   const fetchCategories = useCallback(async () => {
     try {
       const snap = await getDocs(collection(db, "categories"));
@@ -95,15 +93,12 @@ export default function HomePage() {
     fetchCategories();
   }, [fetchCategories]);
 
-  // ✅ Filter categories by area from UserContext
   const filteredCategories = allCategories.filter(cat => {
-    // Search filter
     if (searchQuery && !cat.name.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
-    // Area filter
-    if (!area) return true; // no area selected = show all
-    if (!cat.area) return true; // no area field = show everywhere
+    if (!area) return true;
+    if (!cat.area) return true;
     const catArea = cat.area.toLowerCase().trim();
     const selectedArea = area.toLowerCase().trim();
     return catArea === selectedArea || catArea === "both";
@@ -165,7 +160,8 @@ export default function HomePage() {
             {banners.map((banner, idx) => (
               <div
                 key={banner.id}
-                className={`absolute inset-0 transition-opacity duration-700 ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
+                onClick={() => router.push(`/banner/${banner.id}`)} // ✅ NEW: banner click → category-filtered offer page
+                className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
               >
                 <Image src={banner.imageUrl} alt={`Banner ${idx + 1}`} fill className="object-cover" />
               </div>
@@ -240,6 +236,14 @@ export default function HomePage() {
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+                {cat.rating && (
+                  <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg">
+                    <Star size={12} className="text-yellow-400 fill-yellow-400" />
+                    <span className="text-white text-xs font-bold">{cat.rating}</span>
+                  </div>
+                )}
+
                 <div className="absolute bottom-0 left-0 right-0 p-3">
                   <p className="text-white font-bold text-sm text-left">{cat.name}</p>
                 </div>

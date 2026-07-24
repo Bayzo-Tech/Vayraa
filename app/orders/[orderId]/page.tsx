@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ArrowLeft, Package, MapPin, Phone, Copy, CheckCircle2, Clock } from "lucide-react";
-import ReviewModal from "@/components/ReviewModal"; // ✅ NEW
+import ReviewModal from "@/components/ReviewModal";
 
 const STATUS_STEPS = [
   { key: "placed", label: "Order Placed 🛒", desc: "Your order has been placed" },
@@ -31,14 +31,14 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const orderId = params?.orderId as string;
 
-  const [order, setOrder] = useState<Record<string, unknown> & { id?: string; orderStatus?: string; cancelledBy?: string; deliveryPartnerName?: string; deliveryPartnerPhone?: string; razorpayPaymentId?: string; itemTotal?: number; totalAmount?: number; deliveryFee?: number; packingFee?: number; location?: { area: string; zone: string }; items?: Array<{ name: string; quantity: number; price: number }>; vendorId?: string; stallName?: string; reviewed?: boolean } | null>(null); // ✅ NEW: added vendorId, stallName, reviewed to type
+  const [order, setOrder] = useState<Record<string, unknown> & { id?: string; orderStatus?: string; cancelledBy?: string; deliveryPartnerName?: string; deliveryPartnerPhone?: string; razorpayPaymentId?: string; itemTotal?: number; totalAmount?: number; deliveryFee?: number; packingFee?: number; location?: { area: string; zone: string }; items?: Array<{ name: string; quantity: number; price: number; foodId?: string }>; vendorId?: string; stallName?: string; reviewed?: boolean } | null>(null); // ✅ items type-la foodId add pannirukken
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpSuccess, setOtpSuccess] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false); // ✅ NEW
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   // ✅ Real-time onSnapshot
   useEffect(() => {
@@ -104,6 +104,11 @@ export default function OrderTrackingPage() {
   const isCancelled = order.orderStatus === "cancelled";
   const isDelivered = order.orderStatus === "delivered";
   const isOutForDelivery = order.orderStatus === "out_for_delivery";
+
+  // ✅ NEW: order.items la irundhu unique foodIds extract pannuren (rating ku)
+  const foodIds = Array.from(
+    new Set((order.items || []).map((i) => i.foodId).filter(Boolean))
+  ) as string[];
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-10">
@@ -226,8 +231,8 @@ export default function OrderTrackingPage() {
           </div>
         )}
 
-        {/* ✅ NEW: Write Review button — shows only after delivery, and only once */}
-        {isDelivered && !order.reviewed && order.vendorId && (
+        {/* ✅ Write Review button — shows only after delivery, and only once, and only if foodIds exist */}
+        {isDelivered && !order.reviewed && order.vendorId && foodIds.length > 0 && (
           <button
             onClick={() => setShowReviewModal(true)}
             className="w-full bg-card border-2 border-primary text-primary font-bold py-3.5 rounded-2xl active:scale-95 transition-transform"
@@ -338,11 +343,12 @@ export default function OrderTrackingPage() {
 
       </div>
 
-      {/* ✅ NEW: Review Modal */}
+      {/* ✅ Review Modal — foodIds pass pannirukken */}
       {showReviewModal && order.vendorId && (
         <ReviewModal
           orderId={orderId}
           vendorId={order.vendorId}
+          foodIds={foodIds}
           stallName={order.stallName || "the vendor"}
           onClose={() => setShowReviewModal(false)}
           onSubmitted={() => setShowReviewModal(false)}
