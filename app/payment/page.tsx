@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
-import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X, Tag } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -14,6 +14,9 @@ import {
   where,
   getDocs,
   setDoc,
+  updateDoc,
+  increment,
+  arrayUnion,
 } from "firebase/firestore";
 
 declare global {
@@ -36,6 +39,13 @@ type CartItem = {
   packingFee?: number;
 };
 
+// ✅ NEW: shape of the coupon data passed from cart page via localStorage
+type AppliedCoupon = {
+  code: string;
+  id: string;
+  discount: number;
+};
+
 export default function PaymentPage() {
   const router = useRouter();
   const { user, area, zone, deliveryFee, authLoading, beaches } = useUser();
@@ -48,6 +58,7 @@ export default function PaymentPage() {
   const [customerName, setCustomerName] = useState("Customer");
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null); // ✅ NEW
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -82,6 +93,15 @@ export default function PaymentPage() {
     const savedOrderType = localStorage.getItem("vayra_order_type");
     if (savedOrderType === "dinein" || savedOrderType === "takeaway") {
       setOrderType(savedOrderType);
+    }
+    // ✅ NEW: read applied coupon (set by cart page before navigating here)
+    try {
+      const savedCoupon = localStorage.getItem("vayra_applied_coupon");
+      if (savedCoupon) {
+        setAppliedCoupon(JSON.parse(savedCoupon));
+      }
+    } catch (e) {
+      console.error("Coupon parse error:", e);
     }
   }, [mounted, router]);
 
@@ -136,7 +156,11 @@ export default function PaymentPage() {
 
   const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
   const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
-  const total = orderType === "dinein" ? subtotal : subtotal + deliveryFee + totalPackingFee;
+  // ✅ NEW: coupon discount subtracted from subtotal before adding delivery/packing fees
+  const couponDiscountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount) / 100) : 0;
+  const total = orderType === "dinein"
+    ? subtotal - couponDiscountAmount
+    : subtotal + deliveryFee + totalPackingFee - couponDiscountAmount;
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const getVendorId = async (stallName: string): Promise<string> => {
@@ -195,7 +219,7 @@ export default function PaymentPage() {
         phone: user?.phoneNumber || customerPhone || "unknown",
         location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
         items: cart.map((i) => ({
-          foodId: i.id, // ✅ NEW: rating system-ku venum — food-level rating attach panna idhu mandatory
+          foodId: i.id, // rating system-ku venum — food-level rating attach panna idhu mandatory
           name: i.name,
           price: finalPrice(i),
           quantity: i.quantity,
@@ -204,11 +228,14 @@ export default function PaymentPage() {
         itemTotal: subtotal,
         deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
         packingFee: orderType === "dinein" ? 0 : totalPackingFee,
+        couponCode: appliedCoupon?.code || null,        // ✅ NEW: record which coupon was used
+        couponDiscountPercent: appliedCoupon?.discount || 0, // ✅ NEW
+        couponDiscountAmount: couponDiscountAmount,      // ✅ NEW: rupee amount saved
         totalAmount: total,
         orderType,
         paymentMethod: "razorpay",
-        paymentStatus: "created", // ✅ webhook/handler இது "paid"-ஆ மாத்தும்
-        status: "pending",         // ✅ "placed" ஆவது payment success ஆனா தான்
+        paymentStatus: "created", // webhook/handler இது "paid"-ஆ மாத்தும்
+        status: "pending",         // "placed" ஆவது payment success ஆனா தான்
         orderStatus: "pending",
         createdAt: serverTimestamp(),
         beachId,
@@ -232,14 +259,14 @@ export default function PaymentPage() {
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        // ✅ firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
+        // firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
         // exact document-ஐ direct-ஆ கண்டுபிடிக்கும், query தேவையில்ல
         notes: { firestoreOrderId: orderId },
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
         }) {
-          // ✅ இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
+          // இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
           let saveSuccess = false;
           let lastError = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
@@ -264,7 +291,25 @@ export default function PaymentPage() {
             console.error("All 3 Firestore update attempts failed:", lastError);
           }
 
-          try { localStorage.removeItem("bayzo_cart"); } catch (e) { console.error(e); }
+          // ✅ NEW: record coupon usage — increment usageCount + add user to usedBy list
+          // (so one-time-per-user and usage-limit checks work on future orders)
+          if (appliedCoupon?.id) {
+            try {
+              const userIdentifier = user?.uid || user?.phoneNumber || normalizedUserId;
+              await updateDoc(doc(db, "coupons", appliedCoupon.id), {
+                usageCount: increment(1),
+                usedBy: arrayUnion(userIdentifier),
+              });
+            } catch (e) {
+              console.error("Failed to record coupon usage:", e);
+              // non-blocking — order already placed successfully, this is just tracking
+            }
+          }
+
+          try {
+            localStorage.removeItem("bayzo_cart");
+            localStorage.removeItem("vayra_applied_coupon"); // ✅ NEW: clear coupon after use
+          } catch (e) { console.error(e); }
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}&paymentId=${response.razorpay_payment_id}&rzpOrderId=${response.razorpay_order_id}`;
         },
         prefill: {
@@ -406,6 +451,15 @@ export default function PaymentPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted">📦 Packing Fee</span>
               <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
+            </div>
+          )}
+          {/* ✅ NEW: coupon discount line — only shows if a coupon was applied on cart page */}
+          {appliedCoupon && couponDiscountAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-green-500 flex items-center gap-1">
+                <Tag size={13} /> Coupon ({appliedCoupon.code})
+              </span>
+              <span className="font-semibold text-green-500">- ₹{couponDiscountAmount}</span>
             </div>
           )}
           <div className="border-t border-border pt-3 flex justify-between">

@@ -6,6 +6,8 @@ import { ArrowLeft, Plus, Minus, Trash2, ShoppingBag, Tag, X } from "lucide-reac
 import Image from "next/image";
 import { useUser } from "@/context/UserContext";
 import BottomNav from "@/components/BottomNav";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 type CartItem = {
   id: string;
@@ -19,22 +21,18 @@ type CartItem = {
   packingFee?: number;
 };
 
-const VALID_COUPONS: Record<string, number> = {
-  BEACH10: 10,
-  WAVE20: 20,
-  FIRSTORDER: 15,
-};
-
 export default function CartPage() {
   const router = useRouter();
-  const { zone, deliveryFee } = useUser();
+  const { zone, deliveryFee, user } = useUser(); // ✅ NEW: user needed to check one-time-per-user coupon usage
   const [cart, setCart] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null); // ✅ NEW: Firestore doc id — needed later at payment to increment usage
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponError, setCouponError] = useState("");
+  const [couponChecking, setCouponChecking] = useState(false); // ✅ NEW: loading state while validating against Firestore
   const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
 
   useEffect(() => { setMounted(true); }, []);
@@ -87,28 +85,119 @@ export default function CartPage() {
     return item.price;
   };
 
-  const applyCoupon = () => {
+  const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
+
+  // ✅ NEW: real Firestore-based coupon validation — replaces hardcoded VALID_COUPONS object
+  const applyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) return;
-    if (VALID_COUPONS[code]) {
-      setAppliedCoupon(code);
-      setCouponDiscount(VALID_COUPONS[code]);
+    setCouponChecking(true);
+    setCouponError("");
+    try {
+      const q = query(collection(db, "coupons"), where("code", "==", code));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        setCouponError("Invalid coupon code");
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponDiscount(0);
+        setCouponChecking(false);
+        return;
+      }
+
+      const couponDoc = snap.docs[0];
+      const coupon = couponDoc.data() as {
+        code: string;
+        discount: number;
+        minOrder?: number;
+        expiry?: string;
+        status?: string;
+        usageLimit?: number | null;
+        usageCount?: number;
+        oneTimePerUser?: boolean;
+        usedBy?: string[];
+      };
+
+      // Check status
+      if (coupon.status === "Inactive") {
+        setCouponError("This coupon is no longer active");
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponDiscount(0);
+        setCouponChecking(false);
+        return;
+      }
+
+      // Check expiry
+      const today = new Date().toISOString().split("T")[0];
+      if (coupon.expiry && coupon.expiry < today) {
+        setCouponError("This coupon has expired");
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponDiscount(0);
+        setCouponChecking(false);
+        return;
+      }
+
+      // Check overall usage limit
+      if (coupon.usageLimit && (coupon.usageCount || 0) >= coupon.usageLimit) {
+        setCouponError("This coupon has reached its usage limit");
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponDiscount(0);
+        setCouponChecking(false);
+        return;
+      }
+
+      // Check min order value
+      if (coupon.minOrder && subtotal < coupon.minOrder) {
+        setCouponError(`Minimum order of ₹${coupon.minOrder} required for this coupon`);
+        setAppliedCoupon(null);
+        setAppliedCouponId(null);
+        setCouponDiscount(0);
+        setCouponChecking(false);
+        return;
+      }
+
+      // Check one-time-per-user restriction
+      if (coupon.oneTimePerUser) {
+        const userIdentifier = user?.uid || user?.phoneNumber || "";
+        const usedByList = coupon.usedBy || [];
+        if (userIdentifier && usedByList.includes(userIdentifier)) {
+          setCouponError("You have already used this coupon");
+          setAppliedCoupon(null);
+          setAppliedCouponId(null);
+          setCouponDiscount(0);
+          setCouponChecking(false);
+          return;
+        }
+      }
+
+      // All checks passed
+      setAppliedCoupon(coupon.code);
+      setAppliedCouponId(couponDoc.id);
+      setCouponDiscount(coupon.discount);
       setCouponError("");
-    } else {
-      setCouponError("Invalid coupon code");
+    } catch (e) {
+      console.error("Coupon validation error:", e);
+      setCouponError("Could not validate coupon. Please try again.");
       setAppliedCoupon(null);
+      setAppliedCouponId(null);
       setCouponDiscount(0);
+    } finally {
+      setCouponChecking(false);
     }
   };
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
+    setAppliedCouponId(null);
     setCouponDiscount(0);
     setCouponCode("");
     setCouponError("");
   };
 
-  const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
   const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
   const discountAmount = appliedCoupon ? Math.round((subtotal * couponDiscount) / 100) : 0;
   const total = orderType === "dinein"
@@ -227,15 +316,23 @@ export default function CartPage() {
                 value={couponCode}
                 onChange={(e) => { setCouponCode(e.target.value); setCouponError(""); }}
                 placeholder="ENTER COUPON CODE"
-                className="flex-1 bg-background text-foreground rounded-xl border border-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary uppercase"
+                disabled={couponChecking}
+                className="flex-1 bg-background text-foreground rounded-xl border border-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary uppercase disabled:opacity-60"
               />
-              <button onClick={applyCoupon} className="bg-primary text-white font-bold px-4 py-2.5 rounded-xl text-sm active:scale-95 transition-transform">
-                Apply
+              <button
+                onClick={applyCoupon}
+                disabled={couponChecking}
+                className="bg-primary text-white font-bold px-4 py-2.5 rounded-xl text-sm active:scale-95 transition-transform disabled:opacity-60 min-w-[80px] flex items-center justify-center"
+              >
+                {couponChecking ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Apply"
+                )}
               </button>
             </div>
           )}
           {couponError && <p className="text-red-500 text-xs mt-2">{couponError}</p>}
-          {!appliedCoupon && <p className="text-muted text-xs mt-2">Try: BEACH10, WAVE20, FIRSTORDER</p>}
         </div>
 
         {/* Order Type Toggle */}
@@ -301,6 +398,19 @@ export default function CartPage() {
               const localUser = userStr ? JSON.parse(userStr) : {};
               if (!localUser.profileComplete) { router.push("/basic-details?redirect=/payment"); return; }
             } catch {}
+            // ✅ NEW: pass applied coupon info to payment page via localStorage so it can be
+            // recorded (usageCount incremented, user added to usedBy) once payment succeeds
+            try {
+              if (appliedCoupon && appliedCouponId) {
+                localStorage.setItem("vayra_applied_coupon", JSON.stringify({
+                  code: appliedCoupon,
+                  id: appliedCouponId,
+                  discount: couponDiscount,
+                }));
+              } else {
+                localStorage.removeItem("vayra_applied_coupon");
+              }
+            } catch { }
             router.push("/payment");
           }}
           className="w-full bg-primary text-white font-bold py-4 rounded-2xl flex items-center justify-between px-5 shadow-lg active:scale-95 transition-all"
