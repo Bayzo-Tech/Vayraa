@@ -132,15 +132,15 @@ function LoginPageContent() {
   };
 
   if (!mounted) return (
-    <div className="h-screen bg-white flex items-center justify-center">
+    <div className="fixed inset-0 bg-white flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   );
 
   return (
-    // ✅ CHANGED: h-screen + overflow-hidden instead of min-h-screen — locks the page
-    // to exactly the viewport height so it can never scroll
-    <div className="h-screen bg-white flex flex-col overflow-hidden">
+    // ✅ FIX: fixed inset-0 pins this to the viewport regardless of body/html scroll —
+    // h-screen alone wasn't enough because the page could still scroll at the document level
+    <div className="fixed inset-0 bg-white flex flex-col overflow-hidden">
 
       <div className="px-4 py-3 flex-shrink-0">
         <button
@@ -160,7 +160,6 @@ function LoginPageContent() {
       </div>
 
       {step === 1 ? (
-        // ✅ CHANGED: flex-1 + justify-center so content fills remaining space without needing scroll
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
           <h2 className="text-2xl font-black text-black mb-4">Sit, Relax, Enjoy</h2>
 
@@ -229,7 +228,6 @@ function LoginPageContent() {
           </p>
         </div>
       ) : (
-        // ✅ CHANGED: flex-1 + min-h-0 so this section also fits within the fixed viewport
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="relative w-full flex-shrink-0" style={{ height: "35vh" }}>
             <Image
@@ -328,7 +326,7 @@ function LoginPageContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="h-screen bg-white flex items-center justify-center">
+      <div className="fixed inset-0 bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     }>
