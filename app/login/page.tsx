@@ -237,7 +237,10 @@ function LoginPageContent() {
             />
           </div>
 
-          <div className="px-5 py-5 flex-1 flex flex-col justify-center min-h-0">
+          {/* ✅ FIX: removed justify-center (kept content top-aligned) + added overflow-y-auto
+              so when the mobile keyboard opens and shrinks the viewport, the OTP boxes and
+              button stay visible (scrollable) instead of getting pushed behind the keyboard */}
+          <div className="px-5 pt-8 pb-5 flex-1 flex flex-col min-h-0 overflow-y-auto">
             <h2 className="text-lg font-black text-black mb-1">OTP Verification</h2>
             <p className="text-xs text-gray-500 mb-5">
               OTP has been sent to +91 {phone}{" "}
