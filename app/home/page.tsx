@@ -36,7 +36,7 @@ export default function HomePage() {
   const [customerName, setCustomerName] = useState("there");
   const [cartCount, setCartCount] = useState(0);
   const [currentBanner, setCurrentBanner] = useState(0);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  // ✅ REMOVED: showProfileMenu state — profile icon now navigates to /profile page instead of a dropdown
   const bannerInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -104,15 +104,7 @@ export default function HomePage() {
     return catArea === selectedArea || catArea === "both";
   });
 
-  const handleLogout = () => {
-    try {
-      localStorage.removeItem("user");
-      localStorage.removeItem("bayzo_area");
-      localStorage.removeItem("bayzo_zone");
-      document.cookie = "bayzo_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    } catch { }
-    router.push("/area");
-  };
+  // ✅ REMOVED: handleLogout — logout logic now lives in app/profile/logout/page.tsx
 
   if (!mounted) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -133,24 +125,13 @@ export default function HomePage() {
           </div>
         </button>
         <h1 className="text-lg font-bold text-foreground">Hello, {customerName}!</h1>
-        <div className="relative">
-          <button
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm"
-          >
-            {customerName.charAt(0).toUpperCase()}
-          </button>
-          {showProfileMenu && (
-            <div className="absolute top-11 right-0 bg-card border border-border rounded-xl shadow-lg py-2 w-36 z-50">
-              <button
-                onClick={handleLogout}
-                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
-              >
-                🚪 Logout
-              </button>
-            </div>
-          )}
-        </div>
+        {/* ✅ CHANGED: profile icon now navigates to /profile page instead of opening a dropdown */}
+        <button
+          onClick={() => router.push("/profile")}
+          className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm"
+        >
+          {customerName.charAt(0).toUpperCase()}
+        </button>
       </div>
 
       {/* Hero Banner */}
@@ -160,7 +141,7 @@ export default function HomePage() {
             {banners.map((banner, idx) => (
               <div
                 key={banner.id}
-                onClick={() => router.push(`/banner/${banner.id}`)} // ✅ NEW: banner click → category-filtered offer page
+                onClick={() => router.push(`/banner/${banner.id}`)}
                 className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
               >
                 <Image src={banner.imageUrl} alt={`Banner ${idx + 1}`} fill className="object-cover" />
@@ -281,8 +262,9 @@ export default function HomePage() {
             <ClipboardList size={22} className="text-muted" />
             <span className="text-[10px] font-semibold text-muted">Orders</span>
           </button>
+          {/* ✅ CHANGED: navigates to /profile page instead of opening dropdown */}
           <button
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            onClick={() => router.push("/profile")}
             className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
             <User size={22} className="text-muted" />
