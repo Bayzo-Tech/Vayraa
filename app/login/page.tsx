@@ -138,8 +138,6 @@ function LoginPageContent() {
   );
 
   return (
-    // ✅ FIX: fixed inset-0 pins this to the viewport regardless of body/html scroll —
-    // h-screen alone wasn't enough because the page could still scroll at the document level
     <div className="fixed inset-0 bg-white flex flex-col overflow-hidden">
 
       <div className="px-4 py-3 flex-shrink-0">
@@ -195,14 +193,14 @@ function LoginPageContent() {
 
           <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 mb-4 focus-within:border-primary transition-colors">
             <IndiaFlag />
-            <span className="text-sm font-medium text-black">+91</span>
+            <span className="text-base font-medium text-black">+91</span>
             <div className="w-px h-4 bg-gray-200" />
             <input
               type="tel"
               value={phone}
               onChange={e => { setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }}
               placeholder="Enter mobile number"
-              className="flex-1 bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
+              className="flex-1 bg-transparent text-base text-black outline-none placeholder:text-gray-400"
               maxLength={10}
             />
           </div>
@@ -276,7 +274,7 @@ function LoginPageContent() {
                 onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
                 maxLength={6}
                 autoFocus
-                className="absolute inset-0 w-full h-full opacity-0 text-2xl tracking-widest"
+                className="absolute inset-0 w-full h-full opacity-0 text-base tracking-widest"
               />
             </div>
 
@@ -314,7 +312,7 @@ function LoginPageContent() {
             <p className="text-sm text-gray-500 leading-relaxed">
               This is a placeholder for your Privacy Policy and Terms of Use document.
               Replace this text block with your actual policy content, or link to an
-              uploaded PDF/document once its ready.
+              uploaded PDF/document once it&apos;s ready.
             </p>
           </div>
         </div>
