@@ -29,14 +29,16 @@ interface CartItem extends Food {
   quantity: number;
 }
 
-// ✅ NEW: Cloudinary URL-ல f_auto,q_auto transform inject பண்ணி
+// ✅ Cloudinary URL-ல f_auto,q_auto transform inject பண்ணி
 // auto WebP/AVIF format + auto quality serve பண்ண வைக்குறோம்.
-// Cloudinary URL இல்லாத images (or already transformed ones) தொடமாட்டோம்.
+// ✅ NEW: w_400 (max width) add பண்ணிருக்கேன் — list view-ல food card image
+// max 96px (w-24) mattume kaamikkum, so downloading a full-resolution original
+// (often 1000px+) was unnecessary and was the main cause of the 5MB+ page weight.
 const optimizeCloudinaryUrl = (url?: string): string => {
   if (!url) return "";
   if (!url.includes("res.cloudinary.com")) return url;
   if (url.includes("f_auto") || url.includes("q_auto")) return url;
-  return url.replace("/upload/", "/upload/f_auto,q_auto/");
+  return url.replace("/upload/", "/upload/f_auto,q_auto,w_400/");
 };
 
 export default function CategoryPage() {

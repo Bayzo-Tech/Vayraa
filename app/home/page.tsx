@@ -26,6 +26,15 @@ interface CartItem {
   quantity: number;
 }
 
+// ✅ NEW: Cloudinary URL optimize — auto format/quality + capped width, so home page
+// images (banner, category cards) download faster instead of full-resolution originals
+const optimizeCloudinaryUrl = (url?: string, width = 500): string => {
+  if (!url) return "";
+  if (!url.includes("res.cloudinary.com")) return url;
+  if (url.includes("f_auto") || url.includes("q_auto")) return url;
+  return url.replace("/upload/", `/upload/f_auto,q_auto,w_${width}/`);
+};
+
 export default function HomePage() {
   const router = useRouter();
   const { area } = useUser();
@@ -36,7 +45,6 @@ export default function HomePage() {
   const [customerName, setCustomerName] = useState("there");
   const [cartCount, setCartCount] = useState(0);
   const [currentBanner, setCurrentBanner] = useState(0);
-  // ✅ REMOVED: showProfileMenu state — profile icon now navigates to /profile page instead of a dropdown
   const bannerInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -104,8 +112,6 @@ export default function HomePage() {
     return catArea === selectedArea || catArea === "both";
   });
 
-  // ✅ REMOVED: handleLogout — logout logic now lives in app/profile/logout/page.tsx
-
   if (!mounted) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -125,7 +131,6 @@ export default function HomePage() {
           </div>
         </button>
         <h1 className="text-lg font-bold text-foreground">Hello, {customerName}!</h1>
-        {/* ✅ CHANGED: profile icon now navigates to /profile page instead of opening a dropdown */}
         <button
           onClick={() => router.push("/profile")}
           className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm"
@@ -144,7 +149,8 @@ export default function HomePage() {
                 onClick={() => router.push(`/banner/${banner.id}`)}
                 className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
               >
-                <Image src={banner.imageUrl} alt={`Banner ${idx + 1}`} fill className="object-cover" />
+                {/* ✅ CHANGED: optimized + width-capped Cloudinary URL for the banner image */}
+                <Image src={optimizeCloudinaryUrl(banner.imageUrl, 800)} alt={`Banner ${idx + 1}`} fill className="object-cover" />
               </div>
             ))}
             {banners.length > 1 && (
@@ -210,7 +216,8 @@ export default function HomePage() {
                 className="relative rounded-2xl overflow-hidden bg-card border border-border aspect-square active:scale-95 transition-all shadow-sm"
               >
                 {cat.image ? (
-                  <Image src={cat.image} alt={cat.name} fill className="object-cover" />
+                  // ✅ CHANGED: optimized + width-capped Cloudinary URL — category cards are small, 400px is plenty
+                  <Image src={optimizeCloudinaryUrl(cat.image, 400)} alt={cat.name} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full bg-primary/10 flex items-center justify-center">
                     <span className="text-4xl">🍽️</span>
@@ -262,7 +269,6 @@ export default function HomePage() {
             <ClipboardList size={22} className="text-muted" />
             <span className="text-[10px] font-semibold text-muted">Orders</span>
           </button>
-          {/* ✅ CHANGED: navigates to /profile page instead of opening dropdown */}
           <button
             onClick={() => router.push("/profile")}
             className="flex flex-col items-center gap-0.5 py-1 px-3"
