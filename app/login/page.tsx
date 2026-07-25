@@ -29,6 +29,7 @@ function LoginPageContent() {
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false); // ✅ NEW: tracks whether the on-screen keyboard is currently visible
   const otpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -39,6 +40,20 @@ function LoginPageContent() {
       return () => clearTimeout(t);
     }
   }, [step]);
+
+  // ✅ NEW: detect keyboard open/close via visualViewport height shrinking —
+  // when the keyboard covers a large chunk of the screen, we collapse the
+  // illustration image so the OTP boxes stay above the keyboard, always visible
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handleResize = () => {
+      const heightDiff = window.innerHeight - vv.height;
+      setKeyboardOpen(heightDiff > 120); // keyboard typically shrinks viewport by 250px+
+    };
+    vv.addEventListener("resize", handleResize);
+    return () => vv.removeEventListener("resize", handleResize);
+  }, []);
 
   const redirectTo = searchParams.get("redirect") || "/home";
 
@@ -227,7 +242,12 @@ function LoginPageContent() {
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="relative w-full flex-shrink-0" style={{ height: "35vh" }}>
+          {/* ✅ FIX: illustration collapses to 0 height when keyboard is open — frees up
+              space so the OTP boxes and button always stay visible above the keyboard */}
+          <div
+            className="relative w-full flex-shrink-0 transition-all duration-200"
+            style={{ height: keyboardOpen ? "0px" : "30vh" }}
+          >
             <Image
               src="/images/otp-illustration.jpg"
               alt="Delivery illustration"
@@ -237,10 +257,7 @@ function LoginPageContent() {
             />
           </div>
 
-          {/* ✅ FIX: removed justify-center (kept content top-aligned) + added overflow-y-auto
-              so when the mobile keyboard opens and shrinks the viewport, the OTP boxes and
-              button stay visible (scrollable) instead of getting pushed behind the keyboard */}
-          <div className="px-5 pt-8 pb-5 flex-1 flex flex-col min-h-0 overflow-y-auto">
+          <div className="px-5 pt-6 pb-5 flex-1 flex flex-col min-h-0 overflow-y-auto">
             <h2 className="text-lg font-black text-black mb-1">OTP Verification</h2>
             <p className="text-xs text-gray-500 mb-5">
               OTP has been sent to +91 {phone}{" "}
