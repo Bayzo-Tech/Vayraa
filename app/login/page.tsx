@@ -29,11 +29,10 @@ function LoginPageContent() {
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
-  const otpInputRef = useRef<HTMLInputElement>(null); // ✅ NEW: lets us focus the hidden input by tapping the visible boxes
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
-  // ✅ NEW: auto-focus the OTP input as soon as step 2 renders, so keyboard opens immediately
   useEffect(() => {
     if (step === 2) {
       const t = setTimeout(() => otpInputRef.current?.focus(), 100);
@@ -133,15 +132,17 @@ function LoginPageContent() {
   };
 
   if (!mounted) return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
+    <div className="h-screen bg-white flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    // ✅ CHANGED: h-screen + overflow-hidden instead of min-h-screen — locks the page
+    // to exactly the viewport height so it can never scroll
+    <div className="h-screen bg-white flex flex-col overflow-hidden">
 
-      <div className="px-4 py-4">
+      <div className="px-4 py-3 flex-shrink-0">
         <button
           onClick={() => {
             if (step === 2) { setStep(1); setOtp(""); setError(""); }
@@ -152,18 +153,19 @@ function LoginPageContent() {
         </button>
       </div>
 
-      <div className="px-5 pb-2">
+      <div className="px-5 pb-2 flex-shrink-0">
         <h1 className="text-xl font-black">
           <span className="text-black">VAY</span><span className="text-primary">RA</span>
         </h1>
       </div>
 
       {step === 1 ? (
-        <div className="flex-1 px-5 pb-6 flex flex-col">
-          <h2 className="text-2xl font-black text-black mb-5">Sit, Relax, Enjoy</h2>
+        // ✅ CHANGED: flex-1 + justify-center so content fills remaining space without needing scroll
+        <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
+          <h2 className="text-2xl font-black text-black mb-4">Sit, Relax, Enjoy</h2>
 
-          <div className="flex gap-3 mb-6">
-            <div className="flex-1 h-36 rounded-2xl overflow-hidden bg-green-50 relative">
+          <div className="flex gap-3 mb-5">
+            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-green-50 relative">
               <Image
                 src="/images/fresh-produce.jpg"
                 alt="Fresh produce"
@@ -172,7 +174,7 @@ function LoginPageContent() {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             </div>
-            <div className="flex-1 h-36 rounded-2xl overflow-hidden bg-orange-50 relative">
+            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-orange-50 relative">
               <Image
                 src="/images/beach-food.jpg"
                 alt="Beach food"
@@ -181,7 +183,7 @@ function LoginPageContent() {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             </div>
-            <div className="flex-1 h-36 rounded-2xl overflow-hidden bg-amber-50 relative">
+            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-amber-50 relative">
               <Image
                 src="/images/delivery.jpg"
                 alt="Delivery"
@@ -227,8 +229,9 @@ function LoginPageContent() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col">
-          <div className="relative w-full h-56 bg-orange-50">
+        // ✅ CHANGED: flex-1 + min-h-0 so this section also fits within the fixed viewport
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="relative w-full flex-shrink-0" style={{ height: "35vh" }}>
             <Image
               src="/images/otp-illustration.jpg"
               alt="Delivery illustration"
@@ -238,7 +241,7 @@ function LoginPageContent() {
             />
           </div>
 
-          <div className="px-5 py-5 flex-1 flex flex-col">
+          <div className="px-5 py-5 flex-1 flex flex-col justify-center min-h-0">
             <h2 className="text-lg font-black text-black mb-1">OTP Verification</h2>
             <p className="text-xs text-gray-500 mb-5">
               OTP has been sent to +91 {phone}{" "}
@@ -250,9 +253,6 @@ function LoginPageContent() {
               </button>
             </p>
 
-            {/* ✅ FIX: boxes wrapped in a relative container with a real, properly-sized
-                transparent input on top — tapping anywhere on the boxes now focuses it
-                and opens the keyboard (previous h-0 w-0 input couldn't receive focus) */}
             <div className="relative mb-3">
               <div className="flex gap-2">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -286,7 +286,7 @@ function LoginPageContent() {
 
             <button
               onClick={handleSendOTP}
-              className="text-primary text-xs font-semibold mb-6 self-start"
+              className="text-primary text-xs font-semibold mb-4 self-start"
             >
               Resend OTP
             </button>
@@ -294,7 +294,7 @@ function LoginPageContent() {
             <button
               onClick={handleVerifyOTP}
               disabled={loading || otp.length !== 6}
-              className="w-full bg-primary disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm active:scale-95 transition-all mt-auto"
+              className="w-full bg-primary disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm active:scale-95 transition-all"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
@@ -328,7 +328,7 @@ function LoginPageContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     }>
