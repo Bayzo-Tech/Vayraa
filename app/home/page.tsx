@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, ShoppingCart, ClipboardList, User, Home, Star } from "lucide-react";
+import { ShoppingCart, ClipboardList, User, Home, Star } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 
 interface Category {
@@ -40,7 +40,7 @@ export default function HomePage() {
   const { area } = useUser();
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery] = useState("");
   const [mounted, setMounted] = useState(false);
   const [customerName, setCustomerName] = useState("there");
   const [cartCount, setCartCount] = useState(0);
@@ -172,26 +172,12 @@ export default function HomePage() {
             </p>
           </div>
         )}
-
-        {/* Search bar */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 z-10">
-          <div className="flex items-center bg-white rounded-2xl border border-gray-200 px-3 py-2.5 shadow-lg">
-            <Search size={16} className="text-gray-400 mr-2 flex-shrink-0" />
-            <input
-              type="text"
-              placeholder={`Search for ${allCategories[0]?.name || "food"}...`}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent text-gray-800 text-sm outline-none placeholder:text-gray-400"
-            />
-          </div>
-        </div>
       </div>
 
-      {/* Categories */}
+      {/* Stalls */}
       <div className="px-4 mt-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Categories</h2>
+          <h2 className="text-base font-bold text-foreground">Stalls</h2>
           {area && (
             <span className="text-xs text-muted bg-card border border-border px-2 py-1 rounded-full">
               📍 {area}
