@@ -117,24 +117,24 @@ export default function HomePage() {
   });
 
   if (!mounted) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-20">
+    <div className="min-h-screen bg-white flex flex-col pb-20">
 
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-background px-4 py-3 flex items-center justify-between border-b border-border">
-        <button onClick={() => router.push("/area")} className="p-2 text-foreground">
+      <div className="sticky top-0 z-20 bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100">
+        <button onClick={() => router.push("/area")} className="p-2 text-black">
           <div className="flex flex-col gap-1.5">
-            <span className="w-5 h-0.5 bg-foreground block rounded-full"></span>
-            <span className="w-5 h-0.5 bg-foreground block rounded-full"></span>
-            <span className="w-5 h-0.5 bg-foreground block rounded-full"></span>
+            <span className="w-5 h-0.5 bg-black block rounded-full"></span>
+            <span className="w-5 h-0.5 bg-black block rounded-full"></span>
+            <span className="w-5 h-0.5 bg-black block rounded-full"></span>
           </div>
         </button>
-        <h1 className="text-lg font-bold text-foreground">Hello, {customerName}!</h1>
+        <h1 className="text-lg font-bold text-black">Hello, {customerName}!</h1>
         <button
           onClick={() => router.push("/profile")}
           className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm"
@@ -176,7 +176,7 @@ export default function HomePage() {
                     <button
                       key={idx}
                       onClick={() => setCurrentBanner(idx)}
-                      className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "bg-primary w-4.5" : "bg-white/50 w-1.5"}`}
+                      className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "bg-primary w-4.5" : "bg-white/60 w-1.5"}`}
                     />
                   ))}
                 </div>
@@ -195,16 +195,16 @@ export default function HomePage() {
       {/* Stalls */}
       <div className="px-4 mt-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Stalls</h2>
+          <h2 className="text-base font-bold text-black">Stalls</h2>
           {area && (
-            <span className="text-xs text-muted bg-card border border-border px-2 py-1 rounded-full">
+            <span className="text-xs text-gray-500 bg-gray-100 border border-gray-200 px-2 py-1 rounded-full">
               📍 {area}
             </span>
           )}
         </div>
 
         {filteredCategories.length === 0 ? (
-          <div className="text-center py-8 text-muted text-sm">
+          <div className="text-center py-8 text-gray-400 text-sm">
             {searchQuery
               ? `No categories found for "${searchQuery}"`
               : area
@@ -217,7 +217,7 @@ export default function HomePage() {
               <button
                 key={cat.id}
                 onClick={() => router.push(`/category/${cat.id}`)}
-                className="relative rounded-2xl overflow-hidden bg-card border border-border aspect-square active:scale-95 transition-all shadow-sm"
+                className="relative rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 aspect-square active:scale-95 transition-all shadow-sm"
               >
                 {cat.image ? (
                   // ✅ CHANGED: optimized + width-capped Cloudinary URL — category cards are small, 400px is plenty
@@ -246,7 +246,7 @@ export default function HomePage() {
       </div>
 
       {/* Fixed Bottom Nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
         <div className="flex items-center justify-around py-2 px-4">
           <button onClick={() => router.push("/home")} className="flex flex-col items-center gap-0.5 py-1 px-3">
             <Home size={22} className="text-primary" />
@@ -254,14 +254,14 @@ export default function HomePage() {
           </button>
           <button onClick={() => router.push("/cart")} className="flex flex-col items-center gap-0.5 py-1 px-3 relative">
             <div className="relative">
-              <ShoppingCart size={22} className="text-muted" />
+              <ShoppingCart size={22} className="text-gray-400" />
               {cartCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {cartCount}
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-semibold text-muted">Cart</span>
+            <span className="text-[10px] font-semibold text-gray-400">Cart</span>
           </button>
           <button
             onClick={() => {
@@ -270,15 +270,15 @@ export default function HomePage() {
             }}
             className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
-            <ClipboardList size={22} className="text-muted" />
-            <span className="text-[10px] font-semibold text-muted">Orders</span>
+            <ClipboardList size={22} className="text-gray-400" />
+            <span className="text-[10px] font-semibold text-gray-400">Orders</span>
           </button>
           <button
             onClick={() => router.push("/profile")}
             className="flex flex-col items-center gap-0.5 py-1 px-3"
           >
-            <User size={22} className="text-muted" />
-            <span className="text-[10px] font-semibold text-muted">Profile</span>
+            <User size={22} className="text-gray-400" />
+            <span className="text-[10px] font-semibold text-gray-400">Profile</span>
           </button>
         </div>
       </div>
