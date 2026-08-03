@@ -3,15 +3,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft, ShoppingCart, Plus, Minus } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Plus, Minus, Home, ClipboardList, User } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, documentId, getDocs, doc, getDoc } from "firebase/firestore";
 
 interface Banner {
   id: string;
   title?: string;
   imageUrl?: string;
   categoryIds: string[];
+  foodIds?: string[];
   discountPercent: number;
   status: string;
 }
@@ -85,25 +86,49 @@ export default function BannerPage() {
         setBanner(bannerData);
 
         const categoryIds = bannerData.categoryIds || [];
-        if (categoryIds.length === 0) {
+        // ✅ NEW: banner can also have individually-selected foods (foodIds) —
+        // admin panel's "Browse Category" picker lets admin pick single food items
+        // without selecting the whole category, saved separately as foodIds.
+        const foodIds = bannerData.foodIds || [];
+
+        if (categoryIds.length === 0 && foodIds.length === 0) {
           setFoods([]);
           setLoading(false);
           return;
         }
 
+        let allFoods: Food[] = [];
+
         // Firestore "in" query supports max 30 values — batch if needed
-        const batches: string[][] = [];
-        for (let i = 0; i < categoryIds.length; i += 30) {
-          batches.push(categoryIds.slice(i, i + 30));
+        if (categoryIds.length > 0) {
+          const catBatches: string[][] = [];
+          for (let i = 0; i < categoryIds.length; i += 30) {
+            catBatches.push(categoryIds.slice(i, i + 30));
+          }
+          for (const batch of catBatches) {
+            const q = query(collection(db, "foods"), where("categoryId", "in", batch));
+            const snap = await getDocs(q);
+            allFoods = [...allFoods, ...snap.docs.map(d => ({ id: d.id, ...d.data() } as Food))];
+          }
         }
 
-        let allFoods: Food[] = [];
-        for (const batch of batches) {
-          const q = query(collection(db, "foods"), where("categoryId", "in", batch));
-          const snap = await getDocs(q);
-          allFoods = [...allFoods, ...snap.docs.map(d => ({ id: d.id, ...d.data() } as Food))];
+        // ✅ NEW: fetch individually-selected foods by their document IDs
+        if (foodIds.length > 0) {
+          const foodBatches: string[][] = [];
+          for (let i = 0; i < foodIds.length; i += 30) {
+            foodBatches.push(foodIds.slice(i, i + 30));
+          }
+          for (const batch of foodBatches) {
+            const q = query(collection(db, "foods"), where(documentId(), "in", batch));
+            const snap = await getDocs(q);
+            allFoods = [...allFoods, ...snap.docs.map(d => ({ id: d.id, ...d.data() } as Food))];
+          }
         }
-        setFoods(allFoods);
+
+        // ✅ NEW: dedupe in case a food belongs to both a selected category and foodIds
+        const uniqueFoodsMap = new Map<string, Food>();
+        allFoods.forEach(f => uniqueFoodsMap.set(f.id, f));
+        setFoods(Array.from(uniqueFoodsMap.values()));
       } catch (e) {
         console.error("Error fetching banner:", e);
       } finally {
@@ -291,7 +316,7 @@ export default function BannerPage() {
 
       {/* Cart bottom bar */}
       {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 z-50">
+        <div className="fixed bottom-16 left-0 right-0 p-4 z-40">
           <button
             onClick={() => router.push("/cart")}
             className="w-full bg-primary text-white rounded-2xl py-4 flex items-center justify-between px-5 shadow-xl active:scale-98 transition-transform"
@@ -307,6 +332,45 @@ export default function BannerPage() {
           </button>
         </div>
       )}
+
+      {/* ✅ NEW: Fixed Bottom Nav — same as home page, so banner screen has proper navigation */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
+        <div className="flex items-center justify-around py-2 px-4">
+          <button onClick={() => router.push("/home")} className="flex flex-col items-center gap-0.5 py-1 px-3">
+            <Home size={22} className="text-muted" />
+            <span className="text-[10px] font-semibold text-muted">Home</span>
+          </button>
+          <button onClick={() => router.push("/cart")} className="flex flex-col items-center gap-0.5 py-1 px-3 relative">
+            <div className="relative">
+              <ShoppingCart size={22} className="text-muted" />
+              {totalItems > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                  {totalItems}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-semibold text-muted">Cart</span>
+          </button>
+          <button
+            onClick={() => {
+              const hasSession = document.cookie.split("; ").some(row => row.trim().startsWith("bayzo_session="));
+              router.push(hasSession ? "/history" : "/login?redirect=/history");
+            }}
+            className="flex flex-col items-center gap-0.5 py-1 px-3"
+          >
+            <ClipboardList size={22} className="text-muted" />
+            <span className="text-[10px] font-semibold text-muted">Orders</span>
+          </button>
+          <button
+            onClick={() => router.push("/profile")}
+            className="flex flex-col items-center gap-0.5 py-1 px-3"
+          >
+            <User size={22} className="text-muted" />
+            <span className="text-[10px] font-semibold text-muted">Profile</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 }
