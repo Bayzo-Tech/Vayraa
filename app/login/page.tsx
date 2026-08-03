@@ -166,16 +166,15 @@ function LoginPageContent() {
         </button>
       </div>
 
-      {step === 1 && (
-        <div className="px-5 pb-2 flex-shrink-0 flex justify-center">
-          <h1 className="text-3xl font-black ml-4">
-            <span className="text-black">VAY</span><span className="text-primary">RA</span>
-          </h1>
-        </div>
-      )}
-
       {step === 1 ? (
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
+          {/* ✅ MOVED: VAYRA logo moved from separate top header into here, right above the image, so there's no big gap between logo and image */}
+          <div className="flex justify-center mb-3">
+            <h1 className="text-3xl font-black ml-4">
+              <span className="text-black">VAY</span><span className="text-primary">RA</span>
+            </h1>
+          </div>
+
           <div className="relative w-full h-56 rounded-2xl overflow-hidden mb-5">
             <Image
               src="/images/Login-image.png"
