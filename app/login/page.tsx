@@ -166,9 +166,6 @@ function LoginPageContent() {
         </button>
       </div>
 
-      {/* ✅ CHANGED: header logo now only shows on step 1 — on step 2 (OTP) this space
-          is freed up so the illustration image below can occupy it instead.
-          Also moved slightly right (justify-center + ml-4) and made bigger (text-xl -> text-3xl) */}
       {step === 1 && (
         <div className="px-5 pb-2 flex-shrink-0 flex justify-center">
           <h1 className="text-3xl font-black ml-4">
@@ -179,37 +176,15 @@ function LoginPageContent() {
 
       {step === 1 ? (
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
-          {/* ✅ CHANGED: centered + shifted right (text-center + pl-4), font size unchanged */}
-          <h2 className="text-2xl font-black text-black mb-4 text-center pl-4">Sit, Relax, Enjoy</h2>
-
-          <div className="flex gap-3 mb-5">
-            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-green-50 relative">
-              <Image
-                src="/images/fresh-produce.jpg"
-                alt="Fresh produce"
-                fill
-                className="object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </div>
-            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-orange-50 relative">
-              <Image
-                src="/images/beach-food.jpg"
-                alt="Beach food"
-                fill
-                className="object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </div>
-            <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-amber-50 relative">
-              <Image
-                src="/images/delivery.jpg"
-                alt="Delivery"
-                fill
-                className="object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </div>
+          {/* ✅ CHANGED: 3 small boxes removed, replaced with single Login-image.png */}
+          <div className="relative w-full h-40 rounded-2xl overflow-hidden mb-5">
+            <Image
+              src="/images/Login-image.png"
+              alt="Vayra beach delivery"
+              fill
+              className="object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
           </div>
 
           <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3.5 py-3 mb-4 focus-within:border-primary transition-colors">
