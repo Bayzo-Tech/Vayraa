@@ -176,13 +176,12 @@ function LoginPageContent() {
 
       {step === 1 ? (
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
-          {/* ✅ CHANGED: height increased h-40 -> h-56 so the full "BEACH VAYRA DELIVERY" image shows without top getting cropped */}
           <div className="relative w-full h-56 rounded-2xl overflow-hidden mb-5">
             <Image
               src="/images/Login-image.png"
               alt="Vayra beach delivery"
               fill
-              className="object-cover"
+              className="object-cover object-top"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           </div>
