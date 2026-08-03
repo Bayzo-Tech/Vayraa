@@ -20,6 +20,10 @@ interface Banner {
   id: string;
   imageUrl: string;
   orderIndex?: number;
+  // ✅ NEW: optional title/badge overlay text shown on top of the banner image —
+  // backward compatible, existing banners without these fields simply show no overlay text
+  title?: string;
+  badge?: string;
 }
 
 interface CartItem {
@@ -140,42 +144,56 @@ export default function HomePage() {
       </div>
 
       {/* Hero Banner */}
-      <div className="relative w-full h-52 overflow-hidden">
-        {banners.length > 0 ? (
-          <>
-            {banners.map((banner, idx) => (
-              <div
-                key={banner.id}
-                onClick={() => router.push(`/banner/${banner.id}`)}
-                className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
-              >
-                {/* ✅ CHANGED: optimized + width-capped Cloudinary URL for the banner image */}
-                <Image src={optimizeCloudinaryUrl(banner.imageUrl, 800)} alt={`Banner ${idx + 1}`} fill className="object-cover" />
-              </div>
-            ))}
-            {banners.length > 1 && (
-              <div className="absolute bottom-14 left-0 right-0 flex justify-center gap-1.5 z-10">
-                {banners.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentBanner(idx)}
-                    className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "bg-white w-4" : "bg-white/50 w-1.5"}`}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="w-full h-full bg-primary flex items-center justify-center px-6">
-            <p className="text-white text-xl font-bold text-center">
-              What Beach Food Do You Want Today? 🏖️
-            </p>
-          </div>
-        )}
+      <div className="px-4 pt-4">
+        <div className="relative w-full h-56 rounded-2xl overflow-hidden shadow-lg">
+          {banners.length > 0 ? (
+            <>
+              {banners.map((banner, idx) => (
+                <div
+                  key={banner.id}
+                  onClick={() => router.push(`/banner/${banner.id}`)}
+                  className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
+                >
+                  {/* ✅ CHANGED: optimized + width-capped Cloudinary URL for the banner image */}
+                  <Image src={optimizeCloudinaryUrl(banner.imageUrl, 800)} alt={`Banner ${idx + 1}`} fill className="object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/55 pointer-events-none" />
+                  {/* ✅ NEW: banner badge + title overlay text, shown only when the banner has these fields set */}
+                  {banner.badge && (
+                    <span className="absolute top-3.5 left-3.5 bg-primary text-white text-[11px] font-bold px-3 py-1 rounded-full pointer-events-none">
+                      {banner.badge}
+                    </span>
+                  )}
+                  {banner.title && (
+                    <p className="absolute bottom-7 left-4 right-4 text-white text-xl font-extrabold leading-tight pointer-events-none">
+                      {banner.title}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {banners.length > 1 && (
+                <div className="absolute bottom-3 left-4 flex gap-1.5 z-10">
+                  {banners.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentBanner(idx)}
+                      className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "bg-primary w-4.5" : "bg-white/50 w-1.5"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="w-full h-full bg-primary flex items-center justify-center px-6">
+              <p className="text-white text-xl font-bold text-center">
+                What Beach Food Do You Want Today? 🏖️
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stalls */}
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-foreground">Stalls</h2>
           {area && (
