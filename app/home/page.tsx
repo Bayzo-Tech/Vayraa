@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ShoppingCart, ClipboardList, User, Home, Star, MapPin } from "lucide-react";
+import { ShoppingCart, ClipboardList, User, Home, Star } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 
 interface Category {
@@ -142,16 +142,6 @@ export default function HomePage() {
           {customerName.charAt(0).toUpperCase()}
         </button>
       </div>
-
-      {/* ✅ NEW: Location badge pill — matches the design, shows the selected area under the header */}
-      {area && (
-        <div className="px-4 pt-3 flex justify-end">
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted bg-card border border-border px-3 py-1.5 rounded-full">
-            <MapPin size={13} className="text-primary" />
-            {area}
-          </span>
-        </div>
-      )}
 
       {/* Hero Banner */}
       <div className="px-4 pt-4">
