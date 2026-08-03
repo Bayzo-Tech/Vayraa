@@ -166,15 +166,21 @@ function LoginPageContent() {
         </button>
       </div>
 
-      <div className="px-5 pb-2 flex-shrink-0">
-        <h1 className="text-xl font-black">
-          <span className="text-black">VAY</span><span className="text-primary">RA</span>
-        </h1>
-      </div>
+      {/* ✅ CHANGED: header logo now only shows on step 1 — on step 2 (OTP) this space
+          is freed up so the illustration image below can occupy it instead.
+          Also moved slightly right (justify-center + ml-4) and made bigger (text-xl -> text-3xl) */}
+      {step === 1 && (
+        <div className="px-5 pb-2 flex-shrink-0 flex justify-center">
+          <h1 className="text-3xl font-black ml-4">
+            <span className="text-black">VAY</span><span className="text-primary">RA</span>
+          </h1>
+        </div>
+      )}
 
       {step === 1 ? (
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
-          <h2 className="text-2xl font-black text-black mb-4">Sit, Relax, Enjoy</h2>
+          {/* ✅ CHANGED: centered + shifted right (text-center + pl-4), font size unchanged */}
+          <h2 className="text-2xl font-black text-black mb-4 text-center pl-4">Sit, Relax, Enjoy</h2>
 
           <div className="flex gap-3 mb-5">
             <div className="flex-1 h-28 rounded-2xl overflow-hidden bg-green-50 relative">
