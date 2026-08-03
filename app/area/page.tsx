@@ -58,8 +58,8 @@ export default function AreaSelectionPage() {
             {areaGroups.map((group) => (
               <div
                 key={group.name}
-                className={`border rounded-2xl overflow-hidden transition-all duration-300 ${
-                  expandedArea === group.name ? "border-primary bg-card" : "border-border bg-card/50"
+                className={`border rounded-xl overflow-hidden transition-all duration-300 ${
+                  expandedArea === group.name ? "border-primary bg-card" : "border-border bg-card"
                 }`}
               >
                 <div
@@ -102,7 +102,7 @@ export default function AreaSelectionPage() {
                                 }}
                                 className={`relative p-3 rounded-xl border text-left transition-all ${
                                   isSelected
-                                    ? "border-primary bg-primary/10"
+                                    ? "border-primary"
                                     : "border-border hover:border-primary/50"
                                 }`}
                               >
@@ -130,14 +130,14 @@ export default function AreaSelectionPage() {
       {/* Fixed bottom — always visible */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border p-4 space-y-3">
         {selectedFee && (
-          <div className="bg-primary/10 border border-primary/30 rounded-xl px-4 py-2.5 text-sm text-primary font-medium">
-            🚴 Delivery fee for selected zone: <span className="font-bold">₹{selectedFee}</span>
+          <div className="px-4 py-2.5 text-sm text-muted font-medium">
+            🚴 Delivery fee for selected zone: <span className="font-bold text-primary">₹{selectedFee}</span>
           </div>
         )}
         <button
           onClick={handleConfirm}
           disabled={!selectedAreaName || !selectedZoneNum}
-          className="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50"
+          className="w-full bg-primary text-white font-bold py-4 rounded-xl active:scale-95 transition-all disabled:opacity-50"
         >
           Confirm Location
         </button>
