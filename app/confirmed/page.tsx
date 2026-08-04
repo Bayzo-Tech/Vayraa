@@ -72,17 +72,17 @@ function ConfirmedPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center p-6 pt-12 text-center pb-10">
+    <div className="min-h-screen bg-white flex flex-col items-center p-6 pt-12 text-center pb-10">
 
       {/* Success icon */}
-      <div className={`w-24 h-24 bg-[#00C853] rounded-full flex items-center justify-center mb-6 transition-all duration-700 transform shadow-2xl shadow-green-500/40 ${mounted ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}>
+      <div className={`w-24 h-24 bg-[#00C853] rounded-full flex items-center justify-center mb-6 transition-all duration-700 transform shadow-xl shadow-green-200 ${mounted ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}>
         <Check size={48} className="text-white" strokeWidth={3} />
       </div>
 
       {/* Title */}
       <div className={`transition-all duration-700 delay-200 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <h1 className="text-3xl font-black text-foreground mb-1">Order Confirmed! 🎉</h1>
-        <p className="text-muted text-base">Your beach bites are on the way!</p>
+        <h1 className="text-3xl font-black text-black mb-1">Order Confirmed! 🎉</h1>
+        <p className="text-gray-500 text-base">Your beach bites are on the way!</p>
       </div>
 
       {/* Cards */}
@@ -90,17 +90,17 @@ function ConfirmedPageContent() {
 
         {/* Order Summary */}
         {(orderId || amount > 0 || items.length > 0) && (
-          <div className="bg-card border border-border rounded-3xl p-5 text-left shadow-lg">
-            <h3 className="font-bold text-foreground text-sm flex items-center gap-2 mb-3 border-b border-border pb-2">
+          <div className="bg-white border border-gray-100 rounded-3xl p-5 text-left shadow-lg">
+            <h3 className="font-bold text-black text-sm flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
               <Receipt size={16} className="text-primary" />
               Order Summary
             </h3>
             <div className="space-y-3">
               {orderId && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted">Order ID</span>
-                  <div className="flex items-center gap-2 bg-background border border-border px-2.5 py-1 rounded-lg">
-                    <span className="font-mono font-bold text-xs text-foreground select-all">
+                  <span className="text-gray-500">Order ID</span>
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                    <span className="font-mono font-bold text-xs text-black select-all">
                       {orderId.slice(0, 10)}...
                     </span>
                     <button onClick={copyToClipboard} className="text-primary hover:text-primary/80 transition-colors" title="Copy full Order ID">
@@ -110,21 +110,21 @@ function ConfirmedPageContent() {
                 </div>
               )}
               {amount > 0 && (
-                <div className="flex justify-between items-center text-sm border-t border-border/50 pt-2">
-                  <span className="text-muted">Amount Paid</span>
-                  <span className="font-black text-foreground text-base">₹{amount}</span>
+                <div className="flex justify-between items-center text-sm border-t border-gray-100 pt-2">
+                  <span className="text-gray-500">Amount Paid</span>
+                  <span className="font-black text-black text-base">₹{amount}</span>
                 </div>
               )}
               {items.length > 0 && (
-                <div className="border-t border-border/50 pt-2 space-y-1.5">
-                  <p className="text-xs text-muted font-semibold uppercase flex items-center gap-1">
+                <div className="border-t border-gray-100 pt-2 space-y-1.5">
+                  <p className="text-xs text-gray-500 font-semibold uppercase flex items-center gap-1">
                     <ShoppingBag size={12} /> Items Ordered
                   </p>
                   <div className="max-h-24 overflow-y-auto space-y-1">
                     {items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-xs">
-                        <span className="text-foreground font-medium">{item.name}</span>
-                        <span className="text-muted font-bold">x{item.quantity}</span>
+                        <span className="text-black font-medium">{item.name}</span>
+                        <span className="text-gray-500 font-bold">x{item.quantity}</span>
                       </div>
                     ))}
                   </div>
@@ -135,11 +135,11 @@ function ConfirmedPageContent() {
         )}
 
         {/* Need Help */}
-        <div className="bg-primary/5 border border-primary/20 rounded-3xl p-5 text-left flex items-center justify-between shadow-sm">
+        <div className="bg-orange-50 border border-orange-100 rounded-3xl p-5 text-left flex items-center justify-between shadow-sm">
           <div>
             <p className="text-xs text-primary font-bold uppercase tracking-wider mb-0.5">Need Help?</p>
-            <p className="text-sm font-black text-foreground">Contact: 9176086204</p>
-            <p className="text-[11px] text-muted">24/7 Beach Delivery Support</p>
+            <p className="text-sm font-black text-black">Contact: 9176086204</p>
+            <p className="text-[11px] text-gray-500">24/7 Beach Delivery Support</p>
           </div>
           <a href="tel:9176086204" className="w-12 h-12 bg-primary hover:bg-primary/90 text-white rounded-2xl flex items-center justify-center transition-all shadow-md shadow-primary/30 active:scale-95 flex-shrink-0">
             <Phone size={18} />
@@ -147,30 +147,30 @@ function ConfirmedPageContent() {
         </div>
 
         {/* Estimated Delivery */}
-        <div className="bg-card border border-border rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
+        <div className="bg-white border border-gray-100 rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0">
             <Clock size={22} className="text-primary" />
           </div>
           <div>
-            <p className="text-[10px] text-muted font-medium uppercase tracking-wide">Estimated Delivery</p>
-            <p className="text-lg font-black text-foreground">20–30 mins</p>
+            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Estimated Delivery</p>
+            <p className="text-lg font-black text-black">20–30 mins</p>
           </div>
         </div>
 
         {/* Delivery Location */}
-        <div className="bg-card border border-border rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
-          <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center flex-shrink-0">
+        <div className="bg-white border border-gray-100 rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
+          <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center flex-shrink-0">
             <MapPin size={22} className="text-orange-500" />
           </div>
           <div>
-            <p className="text-[10px] text-muted font-medium uppercase tracking-wide">Delivery To</p>
-            <p className="text-base font-bold text-foreground">Your Beach Location 🏖️</p>
+            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Delivery To</p>
+            <p className="text-base font-bold text-black">Your Beach Location 🏖️</p>
           </div>
         </div>
 
         {/* Notice */}
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-3xl p-4 text-center">
-          <p className="text-yellow-600 dark:text-yellow-400 text-xs font-semibold">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-3xl p-4 text-center">
+          <p className="text-yellow-700 text-xs font-semibold">
             📱 Our delivery partner will call you when they arrive nearby!
           </p>
         </div>
@@ -196,9 +196,9 @@ export default function ConfirmedPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-muted">Loading order confirmation...</p>
+          <p className="mt-4 text-gray-500">Loading order confirmation...</p>
         </div>
       }
     >

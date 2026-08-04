@@ -19,10 +19,10 @@ interface Order {
 }
 
 const statusColors: Record<string, string> = {
-  placed: "bg-[#FF6600]/20 text-[#FF6600]",
-  preparing: "bg-yellow-500/20 text-yellow-500",
-  "out for delivery": "bg-blue-500/20 text-blue-500",
-  delivered: "bg-green-500/20 text-green-500",
+  placed: "bg-orange-50 text-primary",
+  preparing: "bg-yellow-50 text-yellow-600",
+  "out for delivery": "bg-blue-50 text-blue-600",
+  delivered: "bg-green-50 text-green-600",
 };
 
 export default function OrdersPage() {
@@ -113,31 +113,31 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-muted">Loading orders...</p>
+        <p className="mt-4 text-gray-500">Loading orders...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-10">
-      <div className="sticky top-0 z-50 bg-background/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-border">
+    <div className="min-h-screen bg-white flex flex-col pb-10">
+      <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md p-4 flex items-center gap-4 border-b border-gray-100">
         <button
           onClick={() => router.push("/")}
-          className="p-2 bg-card rounded-full border border-border"
+          className="p-2 bg-gray-50 rounded-full border border-gray-200"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={20} className="text-black" />
         </button>
-        <h1 className="text-xl font-bold">Order History</h1>
+        <h1 className="text-xl font-bold text-black">Order History</h1>
       </div>
 
       <div className="p-4 flex-1 pb-24">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-center">
             <span className="text-6xl mb-4">🏖️</span>
-            <h2 className="text-xl font-semibold mb-2">No orders yet</h2>
-            <p className="text-muted">Looks like you haven&apos;t placed any orders.</p>
+            <h2 className="text-xl font-semibold mb-2 text-black">No orders yet</h2>
+            <p className="text-gray-500">Looks like you haven&apos;t placed any orders.</p>
             <Link
               href="/home"
               className="mt-6 bg-primary text-white px-6 py-3 rounded-full font-semibold active:scale-95 transition-transform"
@@ -151,13 +151,13 @@ export default function OrdersPage() {
               <Link
                 key={order.id}
                 href={`/orders/${order.id}`}
-                className="block bg-card border border-border rounded-2xl p-4 active:scale-[0.98] transition-transform"
+                className="block bg-white border border-gray-100 shadow-sm rounded-2xl p-4 active:scale-[0.98] transition-transform"
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <p className="text-xs text-muted mb-1">{formatDate(order.createdAt)}</p>
+                    <p className="text-xs text-gray-500 mb-1">{formatDate(order.createdAt)}</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-muted-foreground">
+                      <span className="text-xs font-mono text-gray-400">
                         {order.paymentId?.slice(0, 12)}...
                       </span>
                       <button
@@ -175,15 +175,15 @@ export default function OrdersPage() {
 
                 <div className="space-y-1 mb-4">
                   {order.items?.map((item, i) => (
-                    <div key={i} className="text-sm">
+                    <div key={i} className="text-sm text-black">
                       <span className="font-semibold">{item.quantity}x</span> {item.name}
                     </div>
                   ))}
                 </div>
 
-                <div className="border-t border-border pt-3 flex justify-between items-center">
-                  <span className="text-muted text-sm">Total Paid</span>
-                  <span className="text-lg font-black text-foreground">₹{order.totalAmount}</span>
+                <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
+                  <span className="text-gray-500 text-sm">Total Paid</span>
+                  <span className="text-lg font-black text-black">₹{order.totalAmount}</span>
                 </div>
               </Link>
             ))}
