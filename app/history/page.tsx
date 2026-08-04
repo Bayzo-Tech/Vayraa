@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ArrowLeft, Package, ChevronRight } from "lucide-react";
+import { ArrowLeft, Package, Copy, CheckCircle2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 interface OrderItem {
@@ -24,13 +24,14 @@ interface Order {
   customerId?: string;
 }
 
+// ✅ CHANGED: light-tint pill colors (design), same status keys/logic as before
 const STATUS_COLOR: Record<string, string> = {
-  placed: "bg-orange-500/20 text-orange-400 border border-orange-500/30",
-  preparing: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
-  ready_for_pickup: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
-  out_for_delivery: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
-  delivered: "bg-green-500/20 text-green-400 border border-green-500/30",
-  cancelled: "bg-red-500/20 text-red-400 border border-red-500/30",
+  placed: "bg-orange-50 text-primary",
+  preparing: "bg-blue-50 text-blue-600",
+  ready_for_pickup: "bg-purple-50 text-purple-600",
+  out_for_delivery: "bg-amber-50 text-amber-600",
+  delivered: "bg-green-50 text-green-600",
+  cancelled: "bg-red-50 text-red-600",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -48,6 +49,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [uid, setUid] = useState<string>("");
+  // ✅ NEW: track which order's payment ID was just copied, for the copy-icon feedback (UI only)
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -119,32 +122,42 @@ export default function HistoryPage() {
     });
   };
 
+  // ✅ NEW: copy payment ID to clipboard, UI-only addition matching design's copy icon
+  const copyPaymentId = (e: React.MouseEvent, orderId: string, paymentId: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(paymentId);
+    setCopiedId(orderId);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
   if (!mounted || loading) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
 
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-3 border-b border-border">
-        <button onClick={() => router.back()} className="p-2 bg-card rounded-full border border-border">
-          <ArrowLeft size={18} />
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center gap-3 border-b border-gray-100">
+        <button onClick={() => router.back()} className="p-2 bg-gray-50 rounded-full border border-gray-200">
+          <ArrowLeft size={18} className="text-black" />
         </button>
-        <h1 className="text-lg font-bold text-foreground">Order History</h1>
+        <h1 className="text-lg font-bold text-black">Order History</h1>
       </div>
 
-      <div className="flex-1 p-4 space-y-3 pb-24">
+      <div className="flex-1 p-4 space-y-4 pb-24">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Package size={48} className="text-muted mb-4" />
-            <h2 className="text-lg font-bold text-foreground mb-1">No orders yet</h2>
-            <p className="text-muted text-sm mb-6">Your order history will appear here</p>
+            <div className="w-24 h-24 rounded-full bg-orange-50 flex items-center justify-center mb-4">
+              <Package size={40} className="text-primary" />
+            </div>
+            <h2 className="text-lg font-bold text-black mb-1">No orders yet</h2>
+            <p className="text-gray-500 text-sm mb-6">Your order history will appear here</p>
             <button
               onClick={() => router.push("/home")}
-              className="bg-primary text-white font-bold px-8 py-3 rounded-xl active:scale-95 transition-all"
+              className="bg-primary text-white font-bold px-8 py-3 rounded-full active:scale-95 transition-all"
             >
               Order Now 🏖️
             </button>
@@ -154,47 +167,57 @@ export default function HistoryPage() {
             <div
               key={order.id}
               onClick={() => router.push(`/orders/${order.id}`)}
-              className="bg-card border border-border rounded-2xl p-4 cursor-pointer active:scale-[0.98] transition-all"
+              className="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-all"
             >
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-xs text-muted">{formatDate(order.createdAt)}</p>
+              <div className="px-4 pt-4 flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-semibold">{formatDate(order.createdAt)}</p>
                   {order.razorpayPaymentId && (
-                    <p className="text-xs text-muted font-mono mt-0.5">{order.razorpayPaymentId.slice(0, 15)}...</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <p className="text-xs text-gray-500 font-mono truncate max-w-[130px]">{order.razorpayPaymentId.slice(0, 15)}...</p>
+                      <button
+                        onClick={(e) => copyPaymentId(e, order.id, order.razorpayPaymentId!)}
+                        className="text-gray-400 hover:text-primary transition-colors flex-shrink-0"
+                      >
+                        {copiedId === order.id ? <CheckCircle2 size={13} className="text-green-500" /> : <Copy size={13} />}
+                      </button>
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${STATUS_COLOR[order.orderStatus] || STATUS_COLOR.placed}`}>
-                    {STATUS_LABEL[order.orderStatus] || order.orderStatus}
-                  </span>
-                  <ChevronRight size={16} className="text-muted" />
-                </div>
+                <span className={`flex-shrink-0 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide ${STATUS_COLOR[order.orderStatus] || STATUS_COLOR.placed}`}>
+                  {STATUS_LABEL[order.orderStatus] || order.orderStatus}
+                </span>
               </div>
 
-              <div className="space-y-1 mb-3">
+              <div className="px-4 pt-3.5 pb-1 space-y-2.5">
                 {order.items?.slice(0, 2).map((item, idx) => (
-                  <p key={idx} className="text-sm text-foreground">
-                    <span className="text-primary font-bold">{item.quantity}x</span> {item.name}
-                  </p>
+                  <div key={idx} className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary text-xs font-bold">{item.quantity}×</span>
+                    </div>
+                    <p className="text-sm text-black truncate">{item.name}</p>
+                  </div>
                 ))}
                 {order.items && order.items.length > 2 && (
-                  <p className="text-xs text-muted">+{order.items.length - 2} more items</p>
+                  <p className="text-xs text-gray-400 pl-9.5">+{order.items.length - 2} more items</p>
                 )}
               </div>
 
-              <div className="flex justify-between items-center border-t border-border pt-3">
-                <div className="flex items-center gap-1 text-muted text-xs">
+              <div className="mx-4 border-t border-gray-100 mt-2" />
+
+              <div className="flex justify-between items-center px-4 py-4">
+                <div className="flex items-center gap-1 text-gray-400 text-xs">
                   <span>🏪</span>
                   <span>{order.vendorName}</span>
                 </div>
-                <p className="font-bold text-foreground">₹{order.totalAmount}</p>
+                <p className="font-black text-black text-base">₹{order.totalAmount}</p>
               </div>
 
               {['placed', 'preparing', 'out_for_delivery', 'ready_for_pickup'].includes(order.orderStatus) && (
-                <div className="mt-3 flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse inline-block"></span>
-                  <p className="text-primary text-xs font-semibold">Tap to track your order →</p>
-                </div>
+                <button className="w-full bg-orange-50 hover:bg-orange-100 transition-colors py-3.5 flex items-center justify-center gap-2 text-primary text-sm font-bold">
+                  Tap to track your order
+                  <span className="text-base">→</span>
+                </button>
               )}
             </div>
           ))
