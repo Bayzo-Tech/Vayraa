@@ -207,7 +207,7 @@ export default function CartPage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -215,12 +215,12 @@ export default function CartPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 pb-24">
-        <div className="w-24 h-24 bg-card rounded-full flex items-center justify-center mb-6 border border-border">
-          <ShoppingBag size={40} className="text-muted" />
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 pb-24">
+        <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6 border border-gray-200">
+          <ShoppingBag size={40} className="text-gray-400" />
         </div>
-        <h2 className="text-2xl font-bold mb-2 text-foreground">Your cart is empty</h2>
-        <p className="text-muted mb-8 text-center text-sm">Add some delicious beach food!</p>
+        <h2 className="text-2xl font-bold mb-2 text-black">Your cart is empty</h2>
+        <p className="text-gray-500 mb-8 text-center text-sm">Add some delicious beach food!</p>
         <button
           onClick={() => router.push("/home")}
           className="bg-primary text-white font-bold py-3 px-8 rounded-xl shadow-lg active:scale-95 transition-all"
@@ -233,16 +233,16 @@ export default function CartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
 
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-border">
-        <button onClick={() => router.back()} className="p-2 bg-card rounded-full border border-border">
-          <ArrowLeft size={20} />
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-gray-100">
+        <button onClick={() => router.back()} className="p-2 bg-gray-50 rounded-full border border-gray-200">
+          <ArrowLeft size={20} className="text-black" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-foreground">Your Cart</h1>
-          <p className="text-xs text-muted">{totalItems} item{totalItems > 1 ? "s" : ""}</p>
+          <h1 className="text-xl font-bold text-black">Your Cart</h1>
+          <p className="text-xs text-gray-500">{totalItems} item{totalItems > 1 ? "s" : ""}</p>
         </div>
       </div>
 
@@ -254,7 +254,7 @@ export default function CartPage() {
           {cart.map((item) => {
             const price = finalPrice(item);
             return (
-              <div key={item.id} className="bg-card rounded-2xl border border-border p-3 flex gap-3">
+              <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 flex gap-3">
                 <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 relative">
                   {item.image ? (
                     <Image src={item.image} alt={item.name} fill className="object-cover" />
@@ -268,12 +268,12 @@ export default function CartPage() {
                       <span className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center flex-shrink-0 ${item.foodType === "nonveg" ? "border-red-500" : "border-green-500"}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${item.foodType === "nonveg" ? "bg-red-500" : "bg-green-500"}`}></span>
                       </span>
-                      <h3 className="font-bold text-foreground text-sm line-clamp-1">{item.name}</h3>
+                      <h3 className="font-bold text-black text-sm line-clamp-1">{item.name}</h3>
                     </div>
-                    {item.stallName && <p className="text-xs text-muted mb-1">🏪 {item.stallName}</p>}
+                    {item.stallName && <p className="text-xs text-gray-500 mb-1">🏪 {item.stallName}</p>}
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-foreground text-sm">₹{price}</span>
-                      {item.offer > 0 && <span className="line-through text-xs text-muted">₹{item.price}</span>}
+                      <span className="font-bold text-black text-sm">₹{price}</span>
+                      {item.offer > 0 && <span className="line-through text-xs text-gray-400">₹{item.price}</span>}
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2">
@@ -286,7 +286,7 @@ export default function CartPage() {
                         <Plus size={13} />
                       </button>
                     </div>
-                    <span className="font-bold text-foreground text-sm">₹{price * item.quantity}</span>
+                    <span className="font-bold text-black text-sm">₹{price * item.quantity}</span>
                   </div>
                 </div>
               </div>
@@ -295,17 +295,17 @@ export default function CartPage() {
         </div>
 
         {/* Coupon Section */}
-        <div className="bg-card rounded-2xl border border-border p-4">
-          <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h3 className="font-bold text-black mb-3 flex items-center gap-2">
             <Tag size={16} className="text-primary" /> Apply Coupon
           </h3>
           {appliedCoupon ? (
-            <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
               <div>
-                <p className="text-green-500 font-bold text-sm">{appliedCoupon}</p>
-                <p className="text-green-400 text-xs">{couponDiscount}% off applied!</p>
+                <p className="text-green-600 font-bold text-sm">{appliedCoupon}</p>
+                <p className="text-green-600 text-xs">{couponDiscount}% off applied!</p>
               </div>
-              <button onClick={removeCoupon} className="text-muted hover:text-foreground transition-colors">
+              <button onClick={removeCoupon} className="text-gray-400 hover:text-black transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -317,7 +317,7 @@ export default function CartPage() {
                 onChange={(e) => { setCouponCode(e.target.value); setCouponError(""); }}
                 placeholder="ENTER COUPON CODE"
                 disabled={couponChecking}
-                className="flex-1 bg-background text-foreground rounded-xl border border-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary uppercase disabled:opacity-60"
+                className="flex-1 bg-white text-black rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary uppercase disabled:opacity-60"
               />
               <button
                 onClick={applyCoupon}
@@ -336,18 +336,18 @@ export default function CartPage() {
         </div>
 
         {/* Order Type Toggle */}
-        <div className="bg-card rounded-2xl border border-border p-4">
-          <h3 className="font-bold text-foreground mb-3">Order Type</h3>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h3 className="font-bold text-black mb-3">Order Type</h3>
           <div className="flex gap-2">
             <button
               onClick={() => setOrderType("takeaway")}
-              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "takeaway" ? "bg-primary text-white" : "bg-card border border-border text-muted"}`}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "takeaway" ? "bg-primary text-white" : "bg-white border border-gray-200 text-black"}`}
             >
               🥡 Takeaway
             </button>
             <button
               onClick={() => setOrderType("dinein")}
-              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "dinein" ? "bg-primary text-white" : "bg-card border border-border text-muted"}`}
+              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${orderType === "dinein" ? "bg-primary text-white" : "bg-white border border-gray-200 text-black"}`}
             >
               🍽️ Dine-in
             </button>
@@ -355,40 +355,40 @@ export default function CartPage() {
         </div>
 
         {/* Bill Details */}
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
-          <h3 className="font-bold text-foreground border-b border-border pb-2">Bill Details</h3>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+          <h3 className="font-bold text-black border-b border-gray-100 pb-2">Bill Details</h3>
           <div className="flex justify-between text-sm">
-            <span className="text-muted">Item Total</span>
-            <span className="font-semibold text-foreground">₹{subtotal}</span>
+            <span className="text-gray-500">Item Total</span>
+            <span className="font-semibold text-black">₹{subtotal}</span>
           </div>
           {orderType === "takeaway" && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Delivery Fee {zone ? `(Zone ${zone})` : ""}</span>
-              <span className="font-semibold text-foreground">₹{deliveryFee}</span>
+              <span className="text-gray-500">Delivery Fee {zone ? `(Zone ${zone})` : ""}</span>
+              <span className="font-semibold text-black">₹{deliveryFee}</span>
             </div>
           )}
           {orderType === "takeaway" && totalPackingFee > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">📦 Packing Fee</span>
-              <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
+              <span className="text-gray-500">📦 Packing Fee</span>
+              <span className="font-semibold text-black">₹{totalPackingFee}</span>
             </div>
           )}
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-green-500">Coupon Discount ({couponDiscount}%)</span>
-              <span className="font-semibold text-green-500">- ₹{discountAmount}</span>
+              <span className="text-green-600">Coupon Discount ({couponDiscount}%)</span>
+              <span className="font-semibold text-green-600">- ₹{discountAmount}</span>
             </div>
           )}
-          <div className="border-t border-border pt-3 flex justify-between font-bold text-lg">
-            <span className="text-foreground">To Pay</span>
-            <span className="text-foreground">₹{total}</span>
+          <div className="border-t border-gray-100 pt-3 flex justify-between font-bold text-lg">
+            <span className="text-black">To Pay</span>
+            <span className="text-black">₹{total}</span>
           </div>
         </div>
 
       </div>
 
       {/* Fixed Pay button — sits above BottomNav */}
-      <div className="fixed bottom-16 left-0 right-0 p-4 bg-background border-t border-border z-40">
+      <div className="fixed bottom-16 left-0 right-0 p-4 bg-white border-t border-gray-100 z-40">
         <button
           onClick={() => {
             const hasSession = document.cookie.split("; ").some((row) => row.trim().startsWith("bayzo_session="));

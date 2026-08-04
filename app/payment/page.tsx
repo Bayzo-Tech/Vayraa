@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
-import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X, Tag } from "lucide-react";
+import { ArrowLeft, MapPin, ShoppingBag, AlertCircle, X, Tag, Phone } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -59,6 +59,9 @@ export default function PaymentPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null); // ✅ NEW
+  // ✅ NEW: optional alternate contact number — so the delivery partner can reach the
+  // customer if their primary number is unreachable; passed through to the order record
+  const [altPhone, setAltPhone] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -213,6 +216,7 @@ export default function PaymentPage() {
         customerId: user?.uid || normalizedUserId,
         customerName,
         customerPhone,
+        alternatePhone: altPhone || null, // ✅ NEW: optional alternate contact, shown to delivery partner
         vendorName,
         vendorId,
         itemsSummary,
@@ -342,27 +346,27 @@ export default function PaymentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
 
       {/* Fail Popup */}
       {showFailPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
-          <div className="bg-card rounded-3xl p-6 w-full max-w-sm border border-border shadow-2xl">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-gray-200 shadow-2xl">
             <div className="flex justify-end mb-2">
-              <button onClick={() => setShowFailPopup(false)} className="text-muted hover:text-foreground">
+              <button onClick={() => setShowFailPopup(false)} className="text-gray-400 hover:text-black">
                 <X size={20} />
               </button>
             </div>
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
                 <AlertCircle size={36} className="text-red-500" />
               </div>
-              <h2 className="text-xl font-bold text-foreground">Payment Failed</h2>
-              <p className="text-sm text-muted">{failMessage}</p>
+              <h2 className="text-xl font-bold text-black">Payment Failed</h2>
+              <p className="text-sm text-gray-500">{failMessage}</p>
               <div className="flex gap-3 w-full mt-2">
                 <button
                   onClick={() => { setShowFailPopup(false); router.push("/home"); }}
-                  className="flex-1 py-3 rounded-2xl border border-border text-foreground font-semibold text-sm"
+                  className="flex-1 py-3 rounded-2xl border border-gray-200 text-black font-semibold text-sm"
                 >
                   Go Home
                 </button>
@@ -379,34 +383,50 @@ export default function PaymentPage() {
       )}
 
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-border">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-gray-100">
         <button
           onClick={() => router.back()}
           disabled={isProcessing}
-          className="p-2 bg-card rounded-full border border-border disabled:opacity-50"
+          className="p-2 bg-gray-50 rounded-full border border-gray-200 disabled:opacity-50"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={20} className="text-black" />
         </button>
-        <h1 className="text-xl font-bold text-foreground">Checkout</h1>
+        <h1 className="text-xl font-bold text-black">Checkout</h1>
       </div>
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
 
         {/* Location */}
-        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
             <MapPin size={20} className="text-primary" />
           </div>
           <div>
-            <p className="text-xs text-muted">Delivering to</p>
-            <p className="font-bold text-foreground">{area} — Zone {zone}</p>
+            <p className="text-xs text-gray-500">Delivering to</p>
+            <p className="font-bold text-black">{area} — Zone {zone}</p>
           </div>
         </div>
 
+        {/* ✅ NEW: Alternate Contact Number */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h3 className="font-bold text-black mb-2 flex items-center gap-2">
+            <Phone size={16} className="text-primary" /> Alternate Contact Number
+          </h3>
+          <input
+            type="tel"
+            value={altPhone}
+            onChange={(e) => setAltPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            placeholder="Alternate phone number (optional)"
+            maxLength={10}
+            className="w-full bg-white text-black rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <p className="text-xs text-gray-400 mt-2">So the delivery partner can reach you if needed</p>
+        </div>
+
         {/* Order Items */}
-        <div className="bg-card rounded-2xl border border-border p-4">
-          <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h3 className="font-bold text-black mb-3 flex items-center gap-2">
             <ShoppingBag size={18} className="text-primary" />
             Order Items ({totalItems})
           </h3>
@@ -422,12 +442,12 @@ export default function PaymentPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground text-sm line-clamp-1">{item.name}</p>
-                  <p className="text-xs text-muted">🏪 {item.stallName}</p>
+                  <p className="font-semibold text-black text-sm line-clamp-1">{item.name}</p>
+                  <p className="text-xs text-gray-500">🏪 {item.stallName}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="font-bold text-foreground text-sm">₹{finalPrice(item) * item.quantity}</p>
-                  <p className="text-xs text-muted">x{item.quantity}</p>
+                  <p className="font-bold text-black text-sm">₹{finalPrice(item) * item.quantity}</p>
+                  <p className="text-xs text-gray-500">x{item.quantity}</p>
                 </div>
               </div>
             ))}
@@ -435,43 +455,43 @@ export default function PaymentPage() {
         </div>
 
         {/* Bill Summary */}
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
-          <h3 className="font-bold text-foreground border-b border-border pb-2">Bill Summary</h3>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+          <h3 className="font-bold text-black border-b border-gray-100 pb-2">Bill Summary</h3>
           <div className="flex justify-between text-sm">
-            <span className="text-muted">Item Total</span>
-            <span className="font-semibold text-foreground">₹{subtotal}</span>
+            <span className="text-gray-500">Item Total</span>
+            <span className="font-semibold text-black">₹{subtotal}</span>
           </div>
           {orderType === "takeaway" && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Delivery Fee (Zone {zone})</span>
-              <span className="font-semibold text-foreground">₹{deliveryFee}</span>
+              <span className="text-gray-500">Delivery Fee (Zone {zone})</span>
+              <span className="font-semibold text-black">₹{deliveryFee}</span>
             </div>
           )}
           {orderType === "takeaway" && totalPackingFee > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">📦 Packing Fee</span>
-              <span className="font-semibold text-foreground">₹{totalPackingFee}</span>
+              <span className="text-gray-500">📦 Packing Fee</span>
+              <span className="font-semibold text-black">₹{totalPackingFee}</span>
             </div>
           )}
           {/* ✅ NEW: coupon discount line — only shows if a coupon was applied on cart page */}
           {appliedCoupon && couponDiscountAmount > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-green-500 flex items-center gap-1">
+              <span className="text-green-600 flex items-center gap-1">
                 <Tag size={13} /> Coupon ({appliedCoupon.code})
               </span>
-              <span className="font-semibold text-green-500">- ₹{couponDiscountAmount}</span>
+              <span className="font-semibold text-green-600">- ₹{couponDiscountAmount}</span>
             </div>
           )}
-          <div className="border-t border-border pt-3 flex justify-between">
-            <span className="font-bold text-foreground text-base">Total to Pay</span>
-            <span className="font-black text-foreground text-xl">₹{total}</span>
+          <div className="border-t border-gray-100 pt-3 flex justify-between">
+            <span className="font-bold text-black text-base">Total to Pay</span>
+            <span className="font-black text-black text-xl">₹{total}</span>
           </div>
         </div>
 
       </div>
 
       {/* Fixed bottom button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-border bg-background">
+      <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-gray-100 bg-white">
         <button
           onClick={handlePayment}
           disabled={!razorpayLoaded || isProcessing || cart.length === 0 || authLoading}
@@ -482,7 +502,7 @@ export default function PaymentPage() {
             {isProcessing ? "Processing..." : authLoading ? "Loading..." : "Pay Now →"}
           </span>
         </button>
-        <p className="text-center text-xs text-muted mt-3">🔒 Secured by Razorpay</p>
+        <p className="text-center text-xs text-gray-500 mt-3">🔒 Secured by Razorpay</p>
       </div>
 
     </div>
