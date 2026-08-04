@@ -20,10 +20,11 @@ interface Banner {
   id: string;
   imageUrl: string;
   orderIndex?: number;
-  // ✅ NEW: optional title/badge overlay text shown on top of the banner image —
-  // backward compatible, existing banners without these fields simply show no overlay text
   title?: string;
   badge?: string;
+  // ✅ NEW: needed to show the "X% OFF" badge on the home page banner —
+  // this field already exists in Firestore (set from the admin panel's Discount % input)
+  discountPercent?: number;
 }
 
 interface CartItem {
@@ -148,28 +149,36 @@ export default function HomePage() {
         <div className="relative w-full h-56 rounded-2xl overflow-hidden shadow-lg">
           {banners.length > 0 ? (
             <>
-              {banners.map((banner, idx) => (
-                <div
-                  key={banner.id}
-                  onClick={() => router.push(`/banner/${banner.id}`)}
-                  className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${idx === currentBanner ? "opacity-100" : "opacity-0"}`}
-                >
-                  {/* ✅ CHANGED: optimized + width-capped Cloudinary URL for the banner image */}
-                  <Image src={optimizeCloudinaryUrl(banner.imageUrl, 800)} alt={`Banner ${idx + 1}`} fill className="object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/55 pointer-events-none" />
-                  {/* ✅ NEW: banner badge + title overlay text, shown only when the banner has these fields set */}
-                  {banner.badge && (
-                    <span className="absolute top-3.5 left-3.5 bg-primary text-white text-[11px] font-bold px-3 py-1 rounded-full pointer-events-none">
-                      {banner.badge}
-                    </span>
-                  )}
-                  {banner.title && (
-                    <p className="absolute bottom-7 left-4 right-4 text-white text-xl font-extrabold leading-tight pointer-events-none">
-                      {banner.title}
-                    </p>
-                  )}
-                </div>
-              ))}
+              {banners.map((banner, idx) => {
+                const isActive = idx === currentBanner;
+                return (
+                  <div
+                    key={banner.id}
+                    onClick={() => router.push(`/banner/${banner.id}`)}
+                    // ✅ FIX: pointer-events toggled with isActive — previously every banner
+                    // (including invisible ones) sat stacked in the same spot and the last one
+                    // in the DOM always intercepted clicks regardless of which was visible.
+                    // Now only the currently-visible banner can receive clicks.
+                    className={`absolute inset-0 transition-opacity duration-700 cursor-pointer ${isActive ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+                  >
+                    {/* ✅ CHANGED: optimized + width-capped Cloudinary URL for the banner image */}
+                    <Image src={optimizeCloudinaryUrl(banner.imageUrl, 800)} alt={`Banner ${idx + 1}`} fill className="object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/55 pointer-events-none" />
+                    {/* ✅ NEW: badge — shows the admin's custom badge text if set, otherwise
+                        automatically shows the discount percent (e.g. "9% OFF") if one exists */}
+                    {(banner.badge || (banner.discountPercent && banner.discountPercent > 0)) && (
+                      <span className="absolute top-3.5 left-3.5 bg-primary text-white text-[11px] font-bold px-3 py-1 rounded-full pointer-events-none">
+                        {banner.badge || `${banner.discountPercent}% OFF`}
+                      </span>
+                    )}
+                    {banner.title && (
+                      <p className="absolute bottom-7 left-4 right-4 text-white text-xl font-extrabold leading-tight pointer-events-none">
+                        {banner.title}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
               {banners.length > 1 && (
                 <div className="absolute bottom-3 left-4 flex gap-1.5 z-10">
                   {banners.map((_, idx) => (
