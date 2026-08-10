@@ -14,9 +14,6 @@ import {
   where,
   getDocs,
   setDoc,
-  updateDoc,
-  increment,
-  arrayUnion,
 } from "firebase/firestore";
 
 declare global {
@@ -295,18 +292,28 @@ export default function PaymentPage() {
             console.error("All 3 Firestore update attempts failed:", lastError);
           }
 
-          // ✅ NEW: record coupon usage — increment usageCount + add user to usedBy list
-          // (so one-time-per-user and usage-limit checks work on future orders)
+          // ✅ CHANGED: coupon usage now recorded server-side via /api/apply-coupon,
+          // which re-validates and uses a Firestore transaction to prevent race conditions.
+          // Non-blocking — order already placed successfully, this is just tracking.
           if (appliedCoupon?.id) {
             try {
-              const userIdentifier = user?.uid || user?.phoneNumber || normalizedUserId;
-              await updateDoc(doc(db, "coupons", appliedCoupon.id), {
-                usageCount: increment(1),
-                usedBy: arrayUnion(userIdentifier),
-              });
+              const idToken = await user?.getIdToken();
+              if (idToken) {
+                const res = await fetch("/api/apply-coupon", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${idToken}`,
+                  },
+                  body: JSON.stringify({ couponId: appliedCoupon.id, orderId }),
+                });
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({}));
+                  console.error("Failed to record coupon usage:", errData.message);
+                }
+              }
             } catch (e) {
               console.error("Failed to record coupon usage:", e);
-              // non-blocking — order already placed successfully, this is just tracking
             }
           }
 
