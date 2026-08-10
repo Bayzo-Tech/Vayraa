@@ -36,7 +36,6 @@ type CartItem = {
   packingFee?: number;
 };
 
-// ✅ NEW: shape of the coupon data passed from cart page via localStorage
 type AppliedCoupon = {
   code: string;
   id: string;
@@ -55,9 +54,7 @@ export default function PaymentPage() {
   const [customerName, setCustomerName] = useState("Customer");
   const [customerPhone, setCustomerPhone] = useState("");
   const [orderType, setOrderType] = useState<"takeaway" | "dinein">("takeaway");
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null); // ✅ NEW
-  // ✅ NEW: optional alternate contact number — so the delivery partner can reach the
-  // customer if their primary number is unreachable; passed through to the order record
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [altPhone, setAltPhone] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
@@ -94,7 +91,6 @@ export default function PaymentPage() {
     if (savedOrderType === "dinein" || savedOrderType === "takeaway") {
       setOrderType(savedOrderType);
     }
-    // ✅ NEW: read applied coupon (set by cart page before navigating here)
     try {
       const savedCoupon = localStorage.getItem("vayra_applied_coupon");
       if (savedCoupon) {
@@ -156,7 +152,6 @@ export default function PaymentPage() {
 
   const subtotal = cart.reduce((sum, i) => sum + finalPrice(i) * i.quantity, 0);
   const totalPackingFee = cart.reduce((sum, i) => sum + (i.packingFee || 0) * i.quantity, 0);
-  // ✅ NEW: coupon discount subtracted from subtotal before adding delivery/packing fees
   const couponDiscountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount) / 100) : 0;
   const total = orderType === "dinein"
     ? subtotal - couponDiscountAmount
@@ -204,23 +199,19 @@ export default function PaymentPage() {
       const docRef = doc(collection(db, "orders"));
       const orderId = docRef.id;
 
-      // ✅ Order-ஐ Razorpay checkout open ஆகுறதுக்கு முன்னாடியே Firestore-ல create பண்றோம்
-      // (paymentStatus: "created"). இப்படி பண்றதால், webhook (server-side, Razorpay-இருந்து நேரடியா
-      // வரும்) இந்த doc-ஐ கண்டுபிடிச்சு "paid" ஆக update பண்ண முடியும் — user browser-க்கு
-      // திரும்ப காத்திருக்க வேண்டாம்.
       const orderPayload = {
         orderId,
         customerId: user?.uid || normalizedUserId,
         customerName,
         customerPhone,
-        alternatePhone: altPhone || null, // ✅ NEW: optional alternate contact, shown to delivery partner
+        alternatePhone: altPhone || null,
         vendorName,
         vendorId,
         itemsSummary,
         phone: user?.phoneNumber || customerPhone || "unknown",
         location: { area, zone: zone !== null ? `Zone ${zone}` : "" },
         items: cart.map((i) => ({
-          foodId: i.id, // rating system-ku venum — food-level rating attach panna idhu mandatory
+          foodId: i.id,
           name: i.name,
           price: finalPrice(i),
           quantity: i.quantity,
@@ -229,14 +220,14 @@ export default function PaymentPage() {
         itemTotal: subtotal,
         deliveryFee: orderType === "dinein" ? 0 : deliveryFee,
         packingFee: orderType === "dinein" ? 0 : totalPackingFee,
-        couponCode: appliedCoupon?.code || null,        // ✅ NEW: record which coupon was used
-        couponDiscountPercent: appliedCoupon?.discount || 0, // ✅ NEW
-        couponDiscountAmount: couponDiscountAmount,      // ✅ NEW: rupee amount saved
+        couponCode: appliedCoupon?.code || null,
+        couponDiscountPercent: appliedCoupon?.discount || 0,
+        couponDiscountAmount: couponDiscountAmount,
         totalAmount: total,
         orderType,
         paymentMethod: "razorpay",
-        paymentStatus: "created", // webhook/handler இது "paid"-ஆ மாத்தும்
-        status: "pending",         // "placed" ஆவது payment success ஆனா தான்
+        paymentStatus: "created",
+        status: "pending",
         orderStatus: "pending",
         createdAt: serverTimestamp(),
         beachId,
@@ -254,47 +245,77 @@ export default function PaymentPage() {
         return;
       }
 
+      // ✅ NEW: ask server to create a real Razorpay order for this exact amount.
+      // This locks the amount server-side — devtools tampering no longer works.
+      let razorpayOrderId = "";
+      try {
+        const createOrderRes = await fetch("/api/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId, amount: total }),
+        });
+        const createOrderData = await createOrderRes.json();
+        if (!createOrderRes.ok || !createOrderData.razorpayOrderId) {
+          throw new Error(createOrderData.error || "Could not start payment");
+        }
+        razorpayOrderId = createOrderData.razorpayOrderId;
+      } catch (err) {
+        console.error("create-order failed:", err);
+        setIsProcessing(false);
+        setFailMessage("Could not start payment. Please try again.");
+        setShowFailPopup(true);
+        return;
+      }
+
       const options: Record<string, unknown> = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: total * 100,
         currency: "INR",
         name: "Vayra",
         description: "Beach Food Delivery - Vayra",
-        // firestoreOrderId-ஐ Razorpay "notes"-ல அனுப்றோம் — webhook இதை வெச்சு
-        // exact document-ஐ direct-ஆ கண்டுபிடிக்கும், query தேவையில்ல
+        order_id: razorpayOrderId, // ✅ NEW: server-issued order id, pins the amount
         notes: { firestoreOrderId: orderId },
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
+          razorpay_signature: string;
         }) {
-          // இப்போ setDoc இல்ல, updateDoc (merge) — doc already create ஆகி இருக்கு
-          let saveSuccess = false;
-          let lastError = null;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              await setDoc(docRef, {
-                paymentStatus: "paid",
-                status: "placed",
-                orderStatus: "placed",
-                razorpayOrderId: response.razorpay_order_id || "",
-                razorpayPaymentId: response.razorpay_payment_id || "",
-              }, { merge: true });
-              saveSuccess = true;
-              break;
-            } catch (err) {
-              lastError = err;
-              console.error(`Firestore update attempt ${attempt} failed:`, err);
-              if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          // ✅ CHANGED: instead of the browser directly marking the order "paid",
+          // we now ask the server to verify the payment signature first.
+          try {
+            const idToken = await user?.getIdToken();
+            const verifyRes = await fetch("/api/verify-payment", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                orderId,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+
+            if (!verifyRes.ok || !verifyData.success) {
+              console.error("Payment verification failed:", verifyData.message);
+              setIsProcessing(false);
+              setFailMessage("Payment verification failed. If money was deducted, it will be refunded. Please contact support.");
+              setShowFailPopup(true);
+              return;
             }
+          } catch (err) {
+            console.error("verify-payment call failed:", err);
+            setIsProcessing(false);
+            setFailMessage("Could not verify payment. If money was deducted, it will be refunded. Please contact support.");
+            setShowFailPopup(true);
+            return;
           }
 
-          if (!saveSuccess) {
-            console.error("All 3 Firestore update attempts failed:", lastError);
-          }
-
-          // ✅ CHANGED: coupon usage now recorded server-side via /api/apply-coupon,
-          // which re-validates and uses a Firestore transaction to prevent race conditions.
-          // Non-blocking — order already placed successfully, this is just tracking.
+          // Coupon usage recorded server-side — unchanged from before, just runs
+          // after verification succeeds now instead of after a direct client write.
           if (appliedCoupon?.id) {
             try {
               const idToken = await user?.getIdToken();
@@ -319,7 +340,7 @@ export default function PaymentPage() {
 
           try {
             localStorage.removeItem("bayzo_cart");
-            localStorage.removeItem("vayra_applied_coupon"); // ✅ NEW: clear coupon after use
+            localStorage.removeItem("vayra_applied_coupon");
           } catch (e) { console.error(e); }
           window.location.href = `/confirmed?orderId=${orderId}&amount=${total}&paymentId=${response.razorpay_payment_id}&rzpOrderId=${response.razorpay_order_id}`;
         },
@@ -355,7 +376,6 @@ export default function PaymentPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* Fail Popup */}
       {showFailPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-gray-200 shadow-2xl">
@@ -389,7 +409,6 @@ export default function PaymentPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center gap-4 border-b border-gray-100">
         <button
           onClick={() => router.back()}
@@ -401,10 +420,8 @@ export default function PaymentPage() {
         <h1 className="text-xl font-bold text-black">Checkout</h1>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
 
-        {/* Location */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
             <MapPin size={20} className="text-primary" />
@@ -415,7 +432,6 @@ export default function PaymentPage() {
           </div>
         </div>
 
-        {/* ✅ NEW: Alternate Contact Number */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <h3 className="font-bold text-black mb-2 flex items-center gap-2">
             <Phone size={16} className="text-primary" /> Alternate Contact Number
@@ -431,7 +447,6 @@ export default function PaymentPage() {
           <p className="text-xs text-gray-400 mt-2">So the delivery partner can reach you if needed</p>
         </div>
 
-        {/* Order Items */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <h3 className="font-bold text-black mb-3 flex items-center gap-2">
             <ShoppingBag size={18} className="text-primary" />
@@ -461,7 +476,6 @@ export default function PaymentPage() {
           </div>
         </div>
 
-        {/* Bill Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
           <h3 className="font-bold text-black border-b border-gray-100 pb-2">Bill Summary</h3>
           <div className="flex justify-between text-sm">
@@ -480,7 +494,6 @@ export default function PaymentPage() {
               <span className="font-semibold text-black">₹{totalPackingFee}</span>
             </div>
           )}
-          {/* ✅ NEW: coupon discount line — only shows if a coupon was applied on cart page */}
           {appliedCoupon && couponDiscountAmount > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-green-600 flex items-center gap-1">
@@ -497,7 +510,6 @@ export default function PaymentPage() {
 
       </div>
 
-      {/* Fixed bottom button */}
       <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-gray-100 bg-white">
         <button
           onClick={handlePayment}

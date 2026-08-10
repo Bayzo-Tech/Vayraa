@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Home, Clock, MapPin, Copy, CheckCircle2, Phone, Receipt, ShoppingBag } from "lucide-react";
 import { useEffect, useState, Suspense } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 function ConfirmedPageContent() {
   const router = useRouter();
@@ -19,30 +19,13 @@ function ConfirmedPageContent() {
     setMounted(true);
     const queryOrderId = searchParams.get("orderId");
     const queryAmount = searchParams.get("amount");
-    const paymentId = searchParams.get("paymentId");
-    const rzpOrderId = searchParams.get("rzpOrderId");
 
     if (queryOrderId) setOrderId(queryOrderId);
     if (queryAmount) setAmount(Number(queryAmount));
 
-    if (queryOrderId && paymentId) {
-      const updateOrder = async () => {
-        try {
-          const orderRef = doc(db, "orders", queryOrderId);
-          await updateDoc(orderRef, {
-            paymentId: paymentId,
-            razorpayOrderId: rzpOrderId || "",
-            paymentStatus: "paid",
-            status: "placed",
-            orderStatus: "placed",
-          });
-          console.log("Order updated to placed");
-        } catch (e) {
-          console.error("Failed to update order:", e);
-        }
-      };
-      updateOrder();
-    }
+    // ✅ REMOVED: this page no longer writes paymentStatus/status to Firestore.
+    // That write now happens server-side in /api/verify-payment, only after the
+    // Razorpay signature has been verified. This page only reads and displays.
 
     const effectiveOrderId = queryOrderId || (typeof window !== "undefined" ? sessionStorage.getItem("last_order_id") : null);
     if (effectiveOrderId) {
@@ -74,21 +57,17 @@ function ConfirmedPageContent() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-6 pt-12 text-center pb-10">
 
-      {/* Success icon */}
       <div className={`w-24 h-24 bg-[#00C853] rounded-full flex items-center justify-center mb-6 transition-all duration-700 transform shadow-xl shadow-green-200 ${mounted ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}>
         <Check size={48} className="text-white" strokeWidth={3} />
       </div>
 
-      {/* Title */}
       <div className={`transition-all duration-700 delay-200 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="text-3xl font-black text-black mb-1">Order Confirmed! 🎉</h1>
         <p className="text-gray-500 text-base">Your beach bites are on the way!</p>
       </div>
 
-      {/* Cards */}
       <div className={`w-full max-w-sm mt-8 space-y-4 transition-all duration-700 delay-300 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
 
-        {/* Order Summary */}
         {(orderId || amount > 0 || items.length > 0) && (
           <div className="bg-white border border-gray-100 rounded-3xl p-5 text-left shadow-lg">
             <h3 className="font-bold text-black text-sm flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
@@ -134,7 +113,6 @@ function ConfirmedPageContent() {
           </div>
         )}
 
-        {/* Need Help */}
         <div className="bg-orange-50 border border-orange-100 rounded-3xl p-5 text-left flex items-center justify-between shadow-sm">
           <div>
             <p className="text-xs text-primary font-bold uppercase tracking-wider mb-0.5">Need Help?</p>
@@ -146,7 +124,6 @@ function ConfirmedPageContent() {
           </a>
         </div>
 
-        {/* Estimated Delivery */}
         <div className="bg-white border border-gray-100 rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0">
             <Clock size={22} className="text-primary" />
@@ -157,7 +134,6 @@ function ConfirmedPageContent() {
           </div>
         </div>
 
-        {/* Delivery Location */}
         <div className="bg-white border border-gray-100 rounded-3xl p-4 flex items-center gap-4 text-left shadow-sm">
           <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center flex-shrink-0">
             <MapPin size={22} className="text-orange-500" />
@@ -168,7 +144,6 @@ function ConfirmedPageContent() {
           </div>
         </div>
 
-        {/* Notice */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-3xl p-4 text-center">
           <p className="text-yellow-700 text-xs font-semibold">
             📱 Our delivery partner will call you when they arrive nearby!
@@ -177,7 +152,6 @@ function ConfirmedPageContent() {
 
       </div>
 
-      {/* Back to Home button */}
       <div className={`w-full max-w-sm mt-8 transition-all duration-700 delay-500 transform ${mounted ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <button
           onClick={() => router.push("/home")}
