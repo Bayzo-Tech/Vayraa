@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const keySecret = process.env.RAZORPAY_KEY_SECRET || "";
 
-    // ✅ Core security check: recompute the signature Razorpay would have
+    // Core security check: recompute the signature Razorpay would have
     // generated for a REAL payment, and compare. A faked payment ID will
     // never produce a matching signature.
     const expectedSignature = crypto
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     const orderData = orderSnap.data();
 
-    // ✅ Make sure the order actually belongs to the person paying
+    // Make sure the order actually belongs to the person paying
     if (orderData?.customerId !== decodedToken.uid) {
       return NextResponse.json({ success: false, message: "Not authorized for this order" }, { status: 403 });
     }
@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
       paymentStatus: "paid",
       status: "placed",
       orderStatus: "placed",
+      paymentId: razorpay_payment_id,         // ✅ FIX: Admin panel Dashboard.jsx reads THIS field name
       razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
+      razorpayPaymentId: razorpay_payment_id, // kept too, for the webhook / any other consumer
       updatedAt: new Date().toISOString(),
     }, { merge: true });
 
