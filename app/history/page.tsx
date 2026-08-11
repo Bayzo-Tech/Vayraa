@@ -24,7 +24,6 @@ interface Order {
   customerId?: string;
 }
 
-// ✅ CHANGED: light-tint pill colors (design), same status keys/logic as before
 const STATUS_COLOR: Record<string, string> = {
   placed: "bg-orange-50 text-primary",
   preparing: "bg-blue-50 text-blue-600",
@@ -49,7 +48,6 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [uid, setUid] = useState<string>("");
-  // ✅ NEW: track which order's payment ID was just copied, for the copy-icon feedback (UI only)
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -73,42 +71,48 @@ export default function HistoryPage() {
   useEffect(() => {
     if (!uid) return;
 
-    const fetchOrders = () => {
-      try {
-        const q = query(
-          collection(db, "orders"),
-          where("customerId", "==", uid),
-          orderBy("createdAt", "desc")
-        );
-        const unsub = onSnapshot(q,
-          (snap) => {
-            setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
-            setLoading(false);
-          },
-          () => {
-            const q2 = query(collection(db, "orders"), where("customerId", "==", uid));
-            onSnapshot(q2, (snap) => {
-              const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-              list.sort((a, b) => {
-                const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
-                  ? (a.createdAt.toDate?.()?.getTime() ?? 0) : 0;
-                const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
-                  ? (b.createdAt.toDate?.()?.getTime() ?? 0) : 0;
-                return bTime - aTime;
-              });
-              setOrders(list);
-              setLoading(false);
-            });
-          }
-        );
-        return unsub;
-      } catch {
-        setLoading(false);
-      }
-    };
+    // ✅ FIXED: the fallback listener (q2) now has its unsubscribe function
+    // tracked properly, so it actually gets cleaned up on unmount. Before,
+    // only the primary listener's unsub was returned/cleaned up — if the
+    // primary query errored and fell back to q2, that second listener was
+    // never unsubscribed, leaking a live Firestore connection.
+    let activeUnsub: (() => void) | null = null;
 
-    const unsub = fetchOrders();
-    return () => { if (unsub) unsub(); };
+    const q = query(
+      collection(db, "orders"),
+      where("customerId", "==", uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubPrimary = onSnapshot(
+      q,
+      (snap) => {
+        setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
+        setLoading(false);
+      },
+      () => {
+        const q2 = query(collection(db, "orders"), where("customerId", "==", uid));
+        const unsubFallback = onSnapshot(q2, (snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+          list.sort((a, b) => {
+            const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
+              ? (a.createdAt.toDate?.()?.getTime() ?? 0) : 0;
+            const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
+              ? (b.createdAt.toDate?.()?.getTime() ?? 0) : 0;
+            return bTime - aTime;
+          });
+          setOrders(list);
+          setLoading(false);
+        });
+        activeUnsub = unsubFallback;
+      }
+    );
+
+    activeUnsub = unsubPrimary;
+
+    return () => {
+      if (activeUnsub) activeUnsub();
+    };
   }, [uid]);
 
   const formatDate = (ts: Order["createdAt"]) => {
@@ -122,7 +126,6 @@ export default function HistoryPage() {
     });
   };
 
-  // ✅ NEW: copy payment ID to clipboard, UI-only addition matching design's copy icon
   const copyPaymentId = (e: React.MouseEvent, orderId: string, paymentId: string) => {
     e.stopPropagation();
     navigator.clipboard.writeText(paymentId);
@@ -139,7 +142,6 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center gap-3 border-b border-gray-100">
         <button onClick={() => router.back()} className="p-2 bg-gray-50 rounded-full border border-gray-200">
           <ArrowLeft size={18} className="text-black" />
