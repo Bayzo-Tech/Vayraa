@@ -57,7 +57,10 @@ function BasicDetailsPageContent() {
         }
       }
       const localUser = userStr ? JSON.parse(userStr) : {};
-      const uid = localUser.uid || auth.currentUser?.uid;
+      // ✅ FIXED: prefer the real signed-in Firebase user first — localStorage
+      // is just a cache and could be stale or tampered with. auth.currentUser
+      // reflects the actual verified session, so it's the trustworthy source.
+      const uid = auth.currentUser?.uid || localUser.uid;
 
       if (!uid) throw new Error("Session expired. Please login again.");
 
@@ -96,12 +99,8 @@ function BasicDetailsPageContent() {
   };
 
   return (
-    // ✅ CHANGED: fixed inset-0 + overflow-y-auto (same fixed-viewport pattern as login/OTP
-    // pages) — page can't scroll behind the keyboard, but the form itself scrolls internally
-    // if content ever exceeds screen height (e.g. small phones + keyboard open)
     <div className="fixed inset-0 bg-white flex flex-col overflow-hidden">
 
-      {/* Header — back button + VAYRA wordmark, same as login/OTP pages */}
       <div className="px-4 py-3 flex-shrink-0">
         <button onClick={() => router.back()}>
           <ChevronLeft size={24} className="text-black" />
@@ -124,7 +123,6 @@ function BasicDetailsPageContent() {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {/* Full Name */}
           <div>
             <label className="block text-sm font-medium mb-1.5 text-black">Full Name</label>
             <input
@@ -137,7 +135,6 @@ function BasicDetailsPageContent() {
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
           </div>
 
-          {/* Age */}
           <div>
             <label className="block text-sm font-medium mb-1.5 text-black">Age</label>
             <input
@@ -151,7 +148,6 @@ function BasicDetailsPageContent() {
             {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age}</p>}
           </div>
 
-          {/* Gender */}
           <div>
             <label className="block text-sm font-medium mb-1.5 text-black">Gender</label>
             <div className="flex gap-2.5">
@@ -169,7 +165,6 @@ function BasicDetailsPageContent() {
             {errors.gender && <p className="text-red-500 text-xs mt-1">{errors.gender}</p>}
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-sm font-medium mb-1.5 text-black">Email ID (Optional)</label>
             <input
