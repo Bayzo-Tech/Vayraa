@@ -29,7 +29,7 @@ function LoginPageContent() {
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false); // ✅ NEW: tracks whether the on-screen keyboard is currently visible
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -41,15 +41,12 @@ function LoginPageContent() {
     }
   }, [step]);
 
-  // ✅ NEW: detect keyboard open/close via visualViewport height shrinking —
-  // when the keyboard covers a large chunk of the screen, we collapse the
-  // illustration image so the OTP boxes stay above the keyboard, always visible
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const vv = window.visualViewport;
     const handleResize = () => {
       const heightDiff = window.innerHeight - vv.height;
-      setKeyboardOpen(heightDiff > 120); // keyboard typically shrinks viewport by 250px+
+      setKeyboardOpen(heightDiff > 120);
     };
     vv.addEventListener("resize", handleResize);
     return () => vv.removeEventListener("resize", handleResize);
@@ -132,7 +129,28 @@ function LoginPageContent() {
           }));
         }
 
-        document.cookie = `bayzo_session=${uid}; path=/; max-age=2592000`;
+        // ✅ CHANGED: instead of setting a plain fake-able cookie directly,
+        // ask the server to create a real Firebase-signed session cookie.
+        try {
+          const currentUser = auth.currentUser;
+          const idToken = await currentUser?.getIdToken();
+          if (!idToken) throw new Error("No ID token available");
+
+          const sessionRes = await fetch("/api/create-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken }),
+          });
+          const sessionData = await sessionRes.json();
+          if (!sessionRes.ok || !sessionData.success) {
+            throw new Error(sessionData.message || "Session creation failed");
+          }
+        } catch (sessionErr) {
+          console.error("create-session failed:", sessionErr);
+          setError("Login failed. Please try again.");
+          setLoading(false);
+          return;
+        }
 
         if (profileComplete) {
           router.replace(redirectTo);
@@ -168,7 +186,6 @@ function LoginPageContent() {
 
       {step === 1 ? (
         <div className="flex-1 px-5 pb-6 flex flex-col justify-center min-h-0">
-          {/* ✅ MOVED: VAYRA logo moved from separate top header into here, right above the image, so there's no big gap between logo and image */}
           <div className="flex justify-center mb-3">
             <h1 className="text-3xl font-black ml-4">
               <span className="text-black">VAY</span><span className="text-primary">RA</span>
@@ -221,8 +238,6 @@ function LoginPageContent() {
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* ✅ FIX: illustration collapses to 0 height when keyboard is open — frees up
-              space so the OTP boxes and button always stay visible above the keyboard */}
           <div
             className="relative w-full flex-shrink-0 transition-all duration-200"
             style={{ height: keyboardOpen ? "0px" : "30vh" }}
