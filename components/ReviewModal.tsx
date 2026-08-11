@@ -2,16 +2,7 @@
 
 import { useState } from "react";
 import { Star, Camera, CheckCircle2, X } from "lucide-react";
-import { db } from "@/lib/firebase";
-import {
-  doc,
-  updateDoc,
-  increment,
-  setDoc,
-  collection,
-  getDoc,
-  runTransaction,
-} from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 
 const CLOUD_NAME = "dvkjhuzdr";
 const UPLOAD_PRESET = "bayzo_upload";
@@ -30,34 +21,10 @@ const uploadToCloudinary = async (file: File) => {
   return data.secure_url;
 };
 
-// ✅ NEW: transaction based average rating updater — accurate ah sum/count/avg calculate pannum
-// (increment() mattum use pannina, avg calculate panna vera read venum, so transaction use pannirukken)
-const updateAverageRating = async (
-  collectionName: string,
-  docId: string,
-  newRating: number
-) => {
-  const ref = doc(db, collectionName, docId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(ref);
-    const data = snap.exists() ? snap.data() : {};
-    const currentSum = (data.ratingSum as number) || 0;
-    const currentCount = (data.ratingCount as number) || 0;
-    const newSum = currentSum + newRating;
-    const newCount = currentCount + 1;
-    const newAvg = Math.round((newSum / newCount) * 10) / 10; // 1 decimal
-    transaction.set(
-      ref,
-      { ratingSum: newSum, ratingCount: newCount, rating: newAvg },
-      { merge: true }
-    );
-  });
-};
-
 interface ReviewModalProps {
   orderId: string;
   vendorId: string;
-  foodIds: string[]; // ✅ NEW: order la irukra unique food IDs
+  foodIds: string[];
   stallName: string;
   onClose: () => void;
   onSubmitted: () => void;
@@ -101,42 +68,36 @@ export default function ReviewModal({
         photoUrl = await uploadToCloudinary(photoFile);
       }
 
-      // 1. Save the review document
-      const reviewRef = doc(collection(db, "reviews"));
-      await setDoc(reviewRef, {
-        orderId,
-        vendorId,
-        foodIds,
-        rating,
-        reviewText: reviewText.trim(),
-        photoUrl,
-        createdAt: new Date(),
+      // ✅ CHANGED: review submission now goes through a server route that
+      // verifies order ownership, delivery status, and one-review-per-order —
+      // this can no longer be spoofed by calling Firestore directly from devtools.
+      const currentUser = auth.currentUser;
+      const idToken = await currentUser?.getIdToken();
+      if (!idToken) {
+        setError("You must be logged in to submit a review.");
+        setSubmitting(false);
+        return;
+      }
+
+      const res = await fetch("/api/submit-review", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orderId,
+          vendorId,
+          foodIds,
+          rating,
+          reviewText: reviewText.trim(),
+          photoUrl,
+        }),
       });
+      const data = await res.json();
 
-      // 2. Mark order as reviewed (so button doesn't show again)
-      await updateDoc(doc(db, "orders", orderId), {
-        reviewed: true,
-      });
-
-      // 3. Update vendor's aggregate rating (existing logic — kept as is)
-      await updateAverageRating("vendors", vendorId, rating);
-
-      // 4. ✅ NEW: Update each food's aggregate rating + its category's aggregate rating
-      for (const foodId of foodIds) {
-        if (!foodId) continue;
-        try {
-          await updateAverageRating("foods", foodId, rating);
-
-          // Fetch food's categoryId to also update category-level rating
-          const foodSnap = await getDoc(doc(db, "foods", foodId));
-          const categoryId = foodSnap.exists() ? (foodSnap.data().categoryId as string) : null;
-          if (categoryId) {
-            await updateAverageRating("categories", categoryId, rating);
-          }
-        } catch (e) {
-          console.error(`Failed to update rating for food ${foodId}:`, e);
-          // continue to next food — one failure shouldn't block others
-        }
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to submit review");
       }
 
       setSuccess(true);
@@ -145,7 +106,7 @@ export default function ReviewModal({
       }, 1500);
     } catch (e) {
       console.error("Review submit error:", e);
-      setError("Failed to submit. Please try again.");
+      setError(e instanceof Error ? e.message : "Failed to submit. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -200,6 +161,7 @@ export default function ReviewModal({
         <label className="block text-sm font-medium text-foreground mb-2">Add Photo</label>
         <label className="flex justify-center px-4 py-6 border-2 border-dashed border-border rounded-xl cursor-pointer hover:bg-card mb-4">
           {photoPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element -- local blob preview URL, next/image doesn't support blob: URLs
             <img src={photoPreview} alt="Preview" className="h-24 object-contain rounded-lg" />
           ) : (
             <div className="text-center">
