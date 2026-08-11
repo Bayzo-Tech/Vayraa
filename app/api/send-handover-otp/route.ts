@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 
-declare global {
-    var handoverOtpStore: Map<string, { otp: string; expiry: number; orderId: string }>;
-}
-if (!global.handoverOtpStore) {
-    global.handoverOtpStore = new Map();
-}
-
 export async function POST(request: Request) {
     try {
         const { orderId } = await request.json();
@@ -39,12 +32,9 @@ export async function POST(request: Request) {
         // 4-digit OTP generate
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
-        // Store in memory
-        global.handoverOtpStore.set(orderId, {
-            otp,
-            expiry: Date.now() + 10 * 60 * 1000,
-            orderId,
-        });
+        // ✅ FIXED: removed the in-memory global.Map — dead weight, OTP is already
+        // saved to Firestore below (handoverOtp field), which is what verification
+        // actually checks. The Map doesn't survive across serverless instances.
 
         // ✅ Send SMS to Delivery Partner - Template #1 (214468)
         const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {

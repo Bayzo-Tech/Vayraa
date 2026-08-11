@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 
-declare global {
-    // eslint-disable-next-line no-var
-    var deliveryOtpStore: Map<string, { otp: string; expiry: number; orderId: string }>;
-}
-if (!global.deliveryOtpStore) {
-    global.deliveryOtpStore = new Map();
-}
-
 export async function POST(request: Request) {
     try {
         const { orderId } = await request.json();
@@ -34,13 +26,11 @@ export async function POST(request: Request) {
         // 4-digit OTP generate
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
-        global.deliveryOtpStore.set(orderId, {
-            otp,
-            expiry: Date.now() + 10 * 60 * 1000,
-            orderId,
-        });
+        // ✅ FIXED: removed the in-memory global.Map — it was dead weight since
+        // the OTP is already saved to Firestore below (deliveryOtp field), which
+        // is what the verify route actually checks. The Map never survives across
+        // serverless instances anyway, so it was unreliable and unused.
 
-        // ✅ FIXED: 2 variables — customerName|otp
         const customerName = orderData.customerName || 'Customer';
 
         const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
