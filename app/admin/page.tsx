@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, limit } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { collection, query, orderBy, onSnapshot, limit } from "firebase/firestore";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 interface Order {
@@ -42,11 +42,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (role !== "admin") return;
 
-    // ✅ CHANGED: added limit(50) — this listener re-fires its ENTIRE result set
-    // on every single order write anywhere in the DB, so an unbounded query
-    // gets expensive fast as order volume grows. This caps it to the 50 most
-    // recent orders (still sorted newest-first). Doesn't affect what's stored
-    // in Firestore — only what this admin view displays at once.
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -62,12 +57,29 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, [role]);
 
+  // ✅ CHANGED: status update now goes through /api/update-order-status, which
+  // verifies the caller's Firebase session AND checks their role === "admin"
+  // server-side, instead of trusting a direct client-side updateDoc call that
+  // only Firestore rules were protecting.
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     setUpdating(orderId);
     try {
-      await updateDoc(doc(db, "orders", orderId), {
-        orderStatus: newStatus,
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("Not authenticated");
+
+      const res = await fetch("/api/update-order-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ orderId, newStatus }),
       });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to update status");
+      }
     } catch (error) {
       console.error("Error updating status:", error);
       alert("Failed to update status");
@@ -76,9 +88,8 @@ export default function AdminPage() {
     }
   };
 
-  // ✅ CHANGED: removed `any`, now properly typed to match createdAt's actual shape
   const isToday = (timestamp: { toDate: () => Date } | null) => {
-    if (!timestamp) return true; // assuming very fresh ones without ts yet are today
+    if (!timestamp) return true;
     const date = timestamp.toDate();
     const today = new Date();
     return date.getDate() === today.getDate() &&
