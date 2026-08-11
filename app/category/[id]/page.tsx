@@ -7,7 +7,7 @@ import { ArrowLeft, ShoppingCart, Plus, Minus, Search } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection, query, where, getDocs,
-  onSnapshot
+  onSnapshot, documentId
 } from "firebase/firestore";
 
 interface Food {
@@ -19,6 +19,7 @@ interface Food {
   description?: string;
   foodType?: string;
   stallName?: string;
+  vendorId?: string; // ✅ NEW: used to look up vendor duty status reliably (stallName can drift/typo, IDs can't)
   packingFee?: number;
   rating?: number;
   categoryId?: string;
@@ -29,11 +30,6 @@ interface CartItem extends Food {
   quantity: number;
 }
 
-// ✅ Cloudinary URL-ல f_auto,q_auto transform inject பண்ணி
-// auto WebP/AVIF format + auto quality serve பண்ண வைக்குறோம்.
-// ✅ NEW: w_400 (max width) add பண்ணிருக்கேன் — list view-ல food card image
-// max 96px (w-24) mattume kaamikkum, so downloading a full-resolution original
-// (often 1000px+) was unnecessary and was the main cause of the 5MB+ page weight.
 const optimizeCloudinaryUrl = (url?: string): string => {
   if (!url) return "";
   if (!url.includes("res.cloudinary.com")) return url;
@@ -52,12 +48,12 @@ export default function CategoryPage() {
   const [categoryName, setCategoryName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "veg" | "nonveg">("all");
+  // ✅ CHANGED: keyed by vendorId now instead of stallName
   const [vendorOpenMap, setVendorOpenMap] = useState<Record<string, boolean>>({});
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
-  // ✅ Load cart from localStorage
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -66,7 +62,6 @@ export default function CategoryPage() {
     } catch { }
   }, [mounted]);
 
-  // ✅ Save cart to localStorage
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -74,7 +69,6 @@ export default function CategoryPage() {
     } catch { }
   }, [cart, mounted]);
 
-  // ✅ Fetch category name
   useEffect(() => {
     if (!categoryId) return;
     const fetchCategory = async () => {
@@ -90,7 +84,6 @@ export default function CategoryPage() {
     fetchCategory();
   }, [categoryId]);
 
-  // ✅ Fetch foods by category
   useEffect(() => {
     if (!categoryId) return;
     setLoading(true);
@@ -109,36 +102,31 @@ export default function CategoryPage() {
     fetchFoods();
   }, [categoryId]);
 
-  // ✅ CHANGED: N separate onSnapshot listeners (one per stall) → ஒரே single
-  // onSnapshot listener using where("stallName","in",[...]). Firestore "in"
-  // query max 30 values ஏத்துக்கும் — உங்க category-க்கு stall count அதுக்குள்ள
-  // இருக்கும்னு assume பண்றோம் (typical case). Listener count இப்போ vendor
-  // count-ஐ சாராது, category-க்கு எப்போதும் 1 listener மட்டும்.
+  // ✅ CHANGED: now queries vendors by document ID (vendorId) instead of stallName.
+  // stallName matching was fragile — a typo, extra space, or rename on either the
+  // vendor doc or a food item's stallName field would silently break duty-status
+  // sync between admin panel and the website. Document IDs can't mismatch this way.
   const setupVendorListeners = useCallback(() => {
     if (foods.length === 0) return;
-    const uniqueStallNames = Array.from(new Set(foods.map(f => f.stallName).filter(Boolean))) as string[];
-    if (uniqueStallNames.length === 0) return;
+    const uniqueVendorIds = Array.from(new Set(foods.map(f => f.vendorId).filter(Boolean))) as string[];
+    if (uniqueVendorIds.length === 0) return;
 
-    // Firestore "in" query 30 values வரைக்கும் மட்டும் support பண்ணும்.
-    // 30-க்கு மேல stalls இருந்தா, batch பண்ணி multiple queries run பண்றோம்.
+    // Firestore "in" query supports max 30 values — batch if needed
     const batches: string[][] = [];
-    for (let i = 0; i < uniqueStallNames.length; i += 30) {
-      batches.push(uniqueStallNames.slice(i, i + 30));
+    for (let i = 0; i < uniqueVendorIds.length; i += 30) {
+      batches.push(uniqueVendorIds.slice(i, i + 30));
     }
 
     const unsubscribers: (() => void)[] = [];
 
     batches.forEach((batch) => {
-      const q = query(collection(db, "vendors"), where("stallName", "in", batch));
+      const q = query(collection(db, "vendors"), where(documentId(), "in", batch));
       const unsub = onSnapshot(q, (snap) => {
         setVendorOpenMap(prev => {
           const next = { ...prev };
           snap.docs.forEach((docSnap) => {
             const vendorData = docSnap.data();
-            const stallName = vendorData.stallName as string | undefined;
-            if (stallName) {
-              next[stallName] = vendorData.isOnDuty === true;
-            }
+            next[docSnap.id] = vendorData.isOnDuty === true;
           });
           return next;
         });
@@ -154,7 +142,6 @@ export default function CategoryPage() {
     return cleanup;
   }, [setupVendorListeners]);
 
-  // ✅ Cart operations
   const addToCart = (food: Food) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === food.id);
@@ -178,7 +165,7 @@ export default function CategoryPage() {
 
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
-  // ✅ Group foods by stall
+  // ✅ Group foods by stall (display grouping only — unchanged, still by name for the UI header)
   const groupedFoods = foods
     .filter(food => {
       if (searchQuery && !food.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -193,7 +180,6 @@ export default function CategoryPage() {
       return groups;
     }, {} as Record<string, Food[]>);
 
-  // ✅ Firestore-ல price string-ஆ (extra space/decimal issue) save ஆயிருந்தாலும் clean number-ஆ parse பண்றோம்
   const cleanPrice = (raw: unknown): number => {
     if (typeof raw === "number") return raw;
     const numeric = parseFloat(String(raw).replace(/\s+/g, "").trim());
@@ -217,7 +203,6 @@ export default function CategoryPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col pb-24">
 
-      {/* Header */}
       <div className="sticky top-0 z-20 bg-background/90 backdrop-blur-md px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3 mb-3">
           <button onClick={() => router.back()} className="p-2 bg-card rounded-full border border-border flex-shrink-0">
@@ -234,7 +219,6 @@ export default function CategoryPage() {
           </button>
         </div>
 
-        {/* Search */}
         <div className="flex items-center bg-card border border-border rounded-xl px-3 py-2 mb-2">
           <Search size={14} className="text-muted mr-2 flex-shrink-0" />
           <input
@@ -246,7 +230,6 @@ export default function CategoryPage() {
           />
         </div>
 
-        {/* Filter tabs */}
         <div className="flex gap-2">
           {(["all", "veg", "nonveg"] as const).map(type => (
             <button
@@ -260,7 +243,6 @@ export default function CategoryPage() {
         </div>
       </div>
 
-      {/* Food List */}
       <div className="flex-1 p-4 space-y-6">
         {loading ? (
           <div className="grid grid-cols-1 gap-4">
@@ -283,10 +265,11 @@ export default function CategoryPage() {
           </div>
         ) : (
           Object.entries(groupedFoods).map(([stallName, stallFoods]) => {
-            const isStallOpen = vendorOpenMap[stallName] ?? true;
+            // ✅ CHANGED: look up open/closed via this stall's vendorId, not stallName string
+            const stallVendorId = stallFoods[0]?.vendorId;
+            const isStallOpen = stallVendorId ? (vendorOpenMap[stallVendorId] ?? true) : true;
             return (
               <div key={stallName}>
-                {/* Stall header */}
                 <div className="flex items-center gap-2 mb-3">
                   <div className={`w-2 h-2 rounded-full ${isStallOpen ? "bg-green-500" : "bg-red-500"}`} />
                   <h2 className="font-bold text-foreground text-base">{stallName}</h2>
@@ -295,14 +278,12 @@ export default function CategoryPage() {
                   </span>
                 </div>
 
-                {/* Food items */}
                 <div className="space-y-3">
                   {stallFoods.map(food => {
                     const qty = getQty(food.id);
                     const price = finalPrice(food);
                     return (
                       <div key={food.id} className="bg-card rounded-2xl border border-border p-3 flex gap-3">
-                        {/* Food image */}
                         <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
                           {food.image ? (
                             <Image
@@ -316,7 +297,6 @@ export default function CategoryPage() {
                           )}
                         </div>
 
-                        {/* Food info */}
                         <div className="flex-1 flex flex-col justify-between min-w-0">
                           <div>
                             <div className="flex items-center gap-1.5 mb-0.5">
@@ -342,7 +322,6 @@ export default function CategoryPage() {
                             </div>
                           </div>
 
-                          {/* Add/Remove buttons */}
                           <div className="mt-2 flex justify-end">
                             {!isStallOpen ? (
                               <div className="w-28 py-2 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-xl text-xs font-bold flex items-center justify-center text-center leading-tight px-1">
@@ -378,7 +357,6 @@ export default function CategoryPage() {
         )}
       </div>
 
-      {/* Cart bottom bar */}
       {totalItems > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 z-50">
           <button

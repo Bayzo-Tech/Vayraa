@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, limit } from "firebase/firestore";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 interface Order {
@@ -42,14 +42,19 @@ export default function AdminPage() {
   useEffect(() => {
     if (role !== "admin") return;
 
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    
+    // ✅ CHANGED: added limit(50) — this listener re-fires its ENTIRE result set
+    // on every single order write anywhere in the DB, so an unbounded query
+    // gets expensive fast as order volume grows. This caps it to the 50 most
+    // recent orders (still sorted newest-first). Doesn't affect what's stored
+    // in Firestore — only what this admin view displays at once.
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOrders = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Order[];
-      
+
       setOrders(fetchedOrders);
       setLoading(false);
     });
@@ -71,7 +76,8 @@ export default function AdminPage() {
     }
   };
 
-  const isToday = (timestamp: any) => {
+  // ✅ CHANGED: removed `any`, now properly typed to match createdAt's actual shape
+  const isToday = (timestamp: { toDate: () => Date } | null) => {
     if (!timestamp) return true; // assuming very fresh ones without ts yet are today
     const date = timestamp.toDate();
     const today = new Date();
@@ -197,7 +203,7 @@ export default function AdminPage() {
               </div>
             </div>
           ))}
-          
+
           {orders.length === 0 && (
             <div className="text-center py-10 text-muted">
               No orders found in the database.
