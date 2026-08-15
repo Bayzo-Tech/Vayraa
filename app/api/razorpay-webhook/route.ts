@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
         status: "placed",
         orderStatus: "placed",
         paymentStatus: "paid",
-        razorpayPaymentId,
+        paymentId: razorpayPaymentId,       // ✅ FIX: admin panel reads this field name
+        razorpayPaymentId,                  // kept for backward compatibility
         updatedAt: new Date().toISOString(),
       }, { merge: true });
 
