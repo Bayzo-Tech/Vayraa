@@ -19,7 +19,7 @@ interface Food {
   description?: string;
   foodType?: string;
   stallName?: string;
-  vendorId?: string; // ✅ NEW: used to look up vendor duty status reliably (stallName can drift/typo, IDs can't)
+  vendorId?: string;
   packingFee?: number;
   rating?: number;
   categoryId?: string;
@@ -37,6 +37,11 @@ const optimizeCloudinaryUrl = (url?: string): string => {
   return url.replace("/upload/", "/upload/f_auto,q_auto,w_400/");
 };
 
+// ✅ ADDED: normalize stall/vendor names for a reliable fallback match
+// ("Besant Nagar Chaat", " besant  nagar chaat ", etc. all resolve the same way)
+const normalizeName = (name?: string) =>
+  (name || "").trim().toLowerCase().replace(/\s+/g, " ");
+
 export default function CategoryPage() {
   const params = useParams();
   const router = useRouter();
@@ -48,8 +53,11 @@ export default function CategoryPage() {
   const [categoryName, setCategoryName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "veg" | "nonveg">("all");
-  // ✅ CHANGED: keyed by vendorId now instead of stallName
   const [vendorOpenMap, setVendorOpenMap] = useState<Record<string, boolean>>({});
+  // ✅ ADDED: secondary lookup keyed by normalized stall name, used as a
+  // fallback whenever a food doc's vendorId doesn't match any vendor doc ID
+  // (missing field, typo, or a food created before vendorId was wired up).
+  const [vendorOpenByName, setVendorOpenByName] = useState<Record<string, boolean>>({});
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -102,37 +110,51 @@ export default function CategoryPage() {
     fetchFoods();
   }, [categoryId]);
 
-  // ✅ CHANGED: now queries vendors by document ID (vendorId) instead of stallName.
-  // stallName matching was fragile — a typo, extra space, or rename on either the
-  // vendor doc or a food item's stallName field would silently break duty-status
-  // sync between admin panel and the website. Document IDs can't mismatch this way.
+  // ✅ CHANGED: still queries vendors by vendorId (fast, exact) for foods that
+  // have it set. NEW: also opens one onSnapshot on the full 'vendors'
+  // collection to build a name-based fallback map, so duty status stays
+  // correct even for food docs missing/mismatching vendorId.
   const setupVendorListeners = useCallback(() => {
-    if (foods.length === 0) return;
-    const uniqueVendorIds = Array.from(new Set(foods.map(f => f.vendorId).filter(Boolean))) as string[];
-    if (uniqueVendorIds.length === 0) return;
-
-    // Firestore "in" query supports max 30 values — batch if needed
-    const batches: string[][] = [];
-    for (let i = 0; i < uniqueVendorIds.length; i += 30) {
-      batches.push(uniqueVendorIds.slice(i, i + 30));
-    }
-
     const unsubscribers: (() => void)[] = [];
 
-    batches.forEach((batch) => {
-      const q = query(collection(db, "vendors"), where(documentId(), "in", batch));
-      const unsub = onSnapshot(q, (snap) => {
-        setVendorOpenMap(prev => {
-          const next = { ...prev };
-          snap.docs.forEach((docSnap) => {
-            const vendorData = docSnap.data();
-            next[docSnap.id] = vendorData.isOnDuty === true;
-          });
-          return next;
-        });
+    // Fallback: listen to ALL vendors, keyed by normalized stallName/name
+    const nameUnsub = onSnapshot(collection(db, "vendors"), (snap) => {
+      const nameMap: Record<string, boolean> = {};
+      snap.docs.forEach((docSnap) => {
+        const v = docSnap.data();
+        const isOpen = v.isOnDuty === true;
+        const key1 = normalizeName(v.stallName);
+        const key2 = normalizeName(v.name);
+        if (key1) nameMap[key1] = isOpen;
+        if (key2) nameMap[key2] = isOpen;
       });
-      unsubscribers.push(unsub);
+      setVendorOpenByName(nameMap);
     });
+    unsubscribers.push(nameUnsub);
+
+    if (foods.length > 0) {
+      const uniqueVendorIds = Array.from(new Set(foods.map(f => f.vendorId).filter(Boolean))) as string[];
+      if (uniqueVendorIds.length > 0) {
+        const batches: string[][] = [];
+        for (let i = 0; i < uniqueVendorIds.length; i += 30) {
+          batches.push(uniqueVendorIds.slice(i, i + 30));
+        }
+        batches.forEach((batch) => {
+          const q = query(collection(db, "vendors"), where(documentId(), "in", batch));
+          const unsub = onSnapshot(q, (snap) => {
+            setVendorOpenMap(prev => {
+              const next = { ...prev };
+              snap.docs.forEach((docSnap) => {
+                const vendorData = docSnap.data();
+                next[docSnap.id] = vendorData.isOnDuty === true;
+              });
+              return next;
+            });
+          });
+          unsubscribers.push(unsub);
+        });
+      }
+    }
 
     return () => unsubscribers.forEach(unsub => unsub());
   }, [foods]);
@@ -165,7 +187,6 @@ export default function CategoryPage() {
 
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
-  // ✅ Group foods by stall (display grouping only — unchanged, still by name for the UI header)
   const groupedFoods = foods
     .filter(food => {
       if (searchQuery && !food.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -192,6 +213,21 @@ export default function CategoryPage() {
       return Math.round(basePrice - (basePrice * food.offer) / 100);
     }
     return basePrice;
+  };
+
+  // ✅ ADDED: single resolver — try vendorId match first (exact), then fall
+  // back to normalized stallName match. Defaults to "open" only if neither
+  // lookup has any data for this vendor at all.
+  const resolveStallOpen = (stallFoods: Food[]): boolean => {
+    const stallVendorId = stallFoods[0]?.vendorId;
+    if (stallVendorId && stallVendorId in vendorOpenMap) {
+      return vendorOpenMap[stallVendorId];
+    }
+    const key = normalizeName(stallFoods[0]?.stallName);
+    if (key && key in vendorOpenByName) {
+      return vendorOpenByName[key];
+    }
+    return true;
   };
 
   if (!mounted) return (
@@ -265,9 +301,8 @@ export default function CategoryPage() {
           </div>
         ) : (
           Object.entries(groupedFoods).map(([stallName, stallFoods]) => {
-            // ✅ CHANGED: look up open/closed via this stall's vendorId, not stallName string
-            const stallVendorId = stallFoods[0]?.vendorId;
-            const isStallOpen = stallVendorId ? (vendorOpenMap[stallVendorId] ?? true) : true;
+            // ✅ CHANGED: uses the combined vendorId → stallName fallback resolver
+            const isStallOpen = resolveStallOpen(stallFoods);
             return (
               <div key={stallName}>
                 <div className="flex items-center gap-2 mb-3">
